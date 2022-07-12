@@ -1,0 +1,25 @@
+Package: psrctrends
+Type: Package
+Title: Process data used in PSRC Trends
+Version: 0.1.0
+Authors@R: c(
+    person("Craig", "Helmann", email = "chelmann@psrc.org", role = "cre"),
+    person("Christy", "Lam", email = "clam@psrc.org", role = "aut"),
+    person("Megan", "Gryzbowski", email = "mgryzbowski@psrc.org", role = "aut"),
+    person("Suzanne", "Childress", email = "schildress@psrc.org", role = "aut"))
+Maintainer: Craig Helmann <chelmann@psrc.org>
+Description: Various functions to process data in the Central Puget Sund Region for trends analysis.
+    This package is currently under development and will be updated frequently over the last half of 2022.
+License: GPL-3 + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Imports: 
+    magrittr,
+    readxl,
+    dplyr,
+    purrr,
+    stats,
+    tidyr,
+    stringr,
+    lubridate
+RoxygenNote: 7.2.0
