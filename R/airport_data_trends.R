@@ -7,9 +7,11 @@
 #' 
 #' @param c.yr Current four digit calendar year as integer
 #' @param c.mo Current month as integer, no leading zeros
-#' @param f.yr First four digit calendar year as integer of data to process - defaults to 201*
+#' @param f.yr First four digit calendar year as integer of data to process - defaults to 2019
 #' @return tibble in long form of SeaTac Airport operations data
+#' 
 #' @importFrom magrittr %<>% %>%
+#' @importFrom rlang .data
 #' 
 #' @examples
 #' 
@@ -18,6 +20,8 @@
 #' @export
 #'
 process_sea_operations_data <- function(c.yr, c.mo, f.yr=2019) {
+  
+  #utils::globalVariables(c("month", "day"))
   
   complete.years <- seq(f.yr, c.yr-1)
   complete.months <- seq(1,12)
@@ -45,8 +49,8 @@ process_sea_operations_data <- function(c.yr, c.mo, f.yr=2019) {
       tidyr::drop_na() %>%
       dplyr::mutate(year=stringr::str_sub(yr, 3, 6)) %>%
       dplyr::mutate(month=stringr::str_sub(yr, 1, 2)) %>%
-      dplyr::mutate(day=paste0(c.yr,"-",month,"-01")) %>%
-      dplyr::mutate(day=lubridate::ymd(day))
+      dplyr::mutate(day=paste0(c.yr,"-",.data$month,"-01")) %>%
+      dplyr::mutate(day=lubridate::ymd(.data$day))
     
     ifelse(is.null(processed), processed <- t, processed <- dplyr::bind_rows(processed,t))
     rm(t)

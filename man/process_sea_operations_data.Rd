@@ -11,7 +11,7 @@ process_sea_operations_data(c.yr, c.mo, f.yr = 2019)
 
 \item{c.mo}{Current month as integer, no leading zeros}
 
-\item{f.yr}{First four digit calendar year as integer of data to process - defaults to 201*}
+\item{f.yr}{First four digit calendar year as integer of data to process - defaults to 2019}
 }
 \value{
 tibble in long form of SeaTac Airport operations data
