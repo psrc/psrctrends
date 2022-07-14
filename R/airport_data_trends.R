@@ -1,9 +1,46 @@
+#' Download SEA Operations Data
+#'
+#' This function downloads passenger, air cargo and air operations monthly data for SEA.
+#' The data is based on the Monthly Passenger, Cargo and Operations Summary files.
+#' Data is pulled monthly from "https://www.portseattle.org/page/airport-statistics".
+#' 
+#' @param monthyear Six digit month+year date as string - example "012019"
+#' @return downloaded file for current month
+#' 
+#' @importFrom magrittr %<>% %>%
+#' @importFrom rlang .data
+#' 
+#' @examples
+#' \dontrun{
+#' download_sea_operations_data(monthyear="042020")
+#' }
+#' @export
+#'
+download_sea_operations_data <- function(monthyear) {
+  
+  data.dir <- getwd()
+  
+  tryCatch(
+    {settings <- list(dir = data.dir,
+                      file.name = paste0("traf-ops-", monthyear, ".xls"),
+                      url ="https://www.portseattle.org/pos/StatisticalReports/Public/"
+    )
+    
+    local.file <- "working.xls"
+    url.file <- paste0(settings$url, settings$file.name)
+    utils::download.file(url.file, file.path(settings$dir, local.file), mode="wb")
+    },
+    error=function(cond) {
+      message("File does not exist")
+    }
+  )
+  
+}
+
 #' Process SEA Operations Data
 #'
 #' This function process passenger, air cargo and air operations monthly data for SEA.
 #' The data is based on the Monthly Passenger, Cargo and Operations Summary files.
-#' Monthly data is stored on PSRC servers at "X:/DSA/psrc-trends-data/monthly-seatac".
-#' Data is pulled monthly from "https://www.portseattle.org/page/airport-statistics".
 #' 
 #' @param c.yr Current four digit calendar year as integer
 #' @param c.mo Current month as integer, no leading zeros
@@ -20,8 +57,6 @@
 #' @export
 #'
 process_sea_operations_data <- function(c.yr, c.mo, f.yr=2019) {
-  
-  #utils::globalVariables(c("month", "day"))
   
   complete.years <- seq(f.yr, c.yr-1)
   complete.months <- seq(1,12)
@@ -43,17 +78,22 @@ process_sea_operations_data <- function(c.yr, c.mo, f.yr=2019) {
   
   processed <- NULL
   for (yr in full.yr) {
-    t <- readxl::read_excel(paste0('X:/DSA/psrc-trends-data/monthly-seatac/',paste0('traf-ops-',yr,'.xls')), range = "A4:C54") %>%
+    download_sea_operations_data(yr)
+    t <- readxl::read_excel("working.xls", range = "A4:C54") %>%
       dplyr::select(1,3) %>%
-      stats::setNames(c("Variable","Estimate")) %>%
+      stats::setNames(c("variable","estimate")) %>%
       tidyr::drop_na() %>%
       dplyr::mutate(year=stringr::str_sub(yr, 3, 6)) %>%
       dplyr::mutate(month=stringr::str_sub(yr, 1, 2)) %>%
-      dplyr::mutate(day=paste0(c.yr,"-",.data$month,"-01")) %>%
-      dplyr::mutate(day=lubridate::ymd(.data$day))
+      dplyr::mutate(data_day=paste0(.data$year,"-",.data$month,"-01")) %>%
+      dplyr::mutate(data_day=lubridate::ymd(.data$data_day)) %>%
+      dplyr::mutate(equiv_day=paste0(c.yr,"-",.data$month,"-01")) %>%
+      dplyr::mutate(equiv_day=lubridate::ymd(.data$equiv_day)) %>%
+      dplyr::mutate(geography="Seattle-Tacoma International Airport")
     
     ifelse(is.null(processed), processed <- t, processed <- dplyr::bind_rows(processed,t))
     rm(t)
+    file.remove("working.xls")
   }
   
   return(processed)

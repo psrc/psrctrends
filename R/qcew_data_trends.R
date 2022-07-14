@@ -32,30 +32,32 @@ process_qcew_monthly_msa <- function(c.yr, c.mo) {
   for (areas in qcew.areas) {
     
     t <- dplyr::as_tibble(openxlsx::read.xlsx(data.file, sheet = areas, detectDates = TRUE, skipEmptyRows = TRUE, startRow = 2, colNames = TRUE)) %>%
-      tidyr::pivot_longer(cols=dplyr::contains("-"), names_to = "month", values_to ="jobs") %>%
-      dplyr::mutate(month = lubridate::ymd(.data$month)) %>%
+      tidyr::pivot_longer(cols=dplyr::contains("-"), names_to = "data_day", values_to ="estimate") %>%
+      dplyr::mutate(data_day = lubridate::ymd(.data$data_day)) %>%
       dplyr::mutate(geography=areas) %>%
       dplyr::select(-.data$NAICS.CELL) %>%
-      dplyr::mutate(NAICS.INDUSTRY = trimws(.data$NAICS.INDUSTRY, "both"))
+      dplyr::mutate(NAICS.INDUSTRY = trimws(.data$NAICS.INDUSTRY, "both")) %>%
+      dplyr::rename(variable=.data$NAICS.INDUSTRY)
+    
     
     if (areas == "Bremerton MSA") {
       
-      private.total <- t %>% dplyr::filter(.data$NAICS.INDUSTRY=="Private Service Providing") 
+      private.total <- t %>% dplyr::filter(.data$variable=="Private Service Providing") 
       
       detailed.private <- t %>% 
-        dplyr::filter(.data$NAICS.INDUSTRY %in% private.services) %>%
-        dplyr::group_by(.data$month) %>%
-        dplyr::summarize(detailed_jobs=sum(.data$jobs))
+        dplyr::filter(.data$variable %in% private.services) %>%
+        dplyr::group_by(.data$data_day) %>%
+        dplyr::summarize(detailed_jobs=sum(.data$estimate))
       
-      private.total <- dplyr::left_join(private.total,detailed.private,by=c("month")) %>%
-        dplyr::mutate(jobs = .data$jobs - .data$detailed_jobs) %>%
-        dplyr::mutate(NAICS.INDUSTRY = "Other Services") %>%
+      private.total <- dplyr::left_join(private.total,detailed.private,by=c("data_day")) %>%
+        dplyr::mutate(estimate = .data$estimate - .data$detailed_jobs) %>%
+        dplyr::mutate(variable = "Other Services") %>%
         dplyr::select(-.data$detailed_jobs)
       
       t <- dplyr::bind_rows(t, private.total)
       
       t <- t %>%
-        dplyr::mutate(NAICS.INDUSTRY = gsub("Mining, Logging, and Construction", "Construction", .data$NAICS.INDUSTRY))
+        dplyr::mutate(variable = gsub("Mining, Logging, and Construction", "Construction", .data$variable))
       
     }
     
@@ -64,13 +66,18 @@ process_qcew_monthly_msa <- function(c.yr, c.mo) {
   
   r <- processed %>%
     dplyr::filter(!(.data$geography %in% c("Washington State"))) %>%
-    dplyr::group_by(.data$NAICS.INDUSTRY,.data$month) %>%
-    dplyr::summarize(jobs=sum(.data$jobs)) %>%
+    dplyr::group_by(.data$variable,.data$data_day) %>%
+    dplyr::summarize(estimate=sum(.data$estimate)) %>%
     dplyr::mutate(geography="Region")
   
   processed <- dplyr::bind_rows(processed,r) %>% 
-    dplyr::mutate(year = lubridate::year(.data$month), date = paste0(lubridate::month(.data$month),"-",lubridate::year(.data$month))) %>% 
-    dplyr::mutate(year=as.character(.data$year))
+    dplyr::mutate(year = lubridate::year(.data$data_day), month = paste0(lubridate::month(.data$data_day))) %>% 
+    dplyr::mutate(year=as.character(.data$year)) %>%
+    dplyr::mutate(month=as.integer(.data$month)) %>%
+    dplyr::mutate(month=formatC(.data$month, width=2, flag="0")) %>%
+    dplyr::mutate(month=as.character(.data$month)) %>%
+    dplyr::mutate(equiv_day=paste0(c.yr,"-",.data$month,"-01")) %>%
+    dplyr::mutate(equiv_day=lubridate::ymd(.data$equiv_day))
   
   file.remove(data.file)
   

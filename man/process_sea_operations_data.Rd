@@ -19,8 +19,6 @@ tibble in long form of SeaTac Airport operations data
 \description{
 This function process passenger, air cargo and air operations monthly data for SEA.
 The data is based on the Monthly Passenger, Cargo and Operations Summary files.
-Monthly data is stored on PSRC servers at "X:/DSA/psrc-trends-data/monthly-seatac".
-Data is pulled monthly from "https://www.portseattle.org/page/airport-statistics".
 }
 \examples{
 
