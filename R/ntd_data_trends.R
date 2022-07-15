@@ -130,7 +130,6 @@ process_ntd_uza_data <- function(yr, pop.limit=1000000, census.yr="2020") {
   utils::download.file(data.url, "working.xlsx", quiet = TRUE, mode = "wb")
   data.file <- paste0(getwd(),"/working.xlsx")
   uza.file <- system.file('extdata', 'uaz_ua_codes.xlsx', package='psrctrends')
-  #uza.file <- paste0(getwd(),"/inst/extdata/uaz_ua_codes.xlsx")
   
   processed <- NULL
   for (areas in ntd.tabs) {
