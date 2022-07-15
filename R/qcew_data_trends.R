@@ -77,7 +77,8 @@ process_qcew_monthly_msa <- function(c.yr, c.mo) {
     dplyr::mutate(month=formatC(.data$month, width=2, flag="0")) %>%
     dplyr::mutate(month=as.character(.data$month)) %>%
     dplyr::mutate(equiv_day=paste0(c.yr,"-",.data$month,"-01")) %>%
-    dplyr::mutate(equiv_day=lubridate::ymd(.data$equiv_day))
+    dplyr::mutate(equiv_day=lubridate::ymd(.data$equiv_day)) %>%
+    dplyr::mutate(concept="Wage and Salary Employment")
   
   file.remove(data.file)
   

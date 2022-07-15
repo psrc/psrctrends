@@ -89,7 +89,8 @@ process_sea_operations_data <- function(c.yr, c.mo, f.yr=2019) {
       dplyr::mutate(data_day=lubridate::ymd(.data$data_day)) %>%
       dplyr::mutate(equiv_day=paste0(c.yr,"-",.data$month,"-01")) %>%
       dplyr::mutate(equiv_day=lubridate::ymd(.data$equiv_day)) %>%
-      dplyr::mutate(geography="Seattle-Tacoma International Airport")
+      dplyr::mutate(geography="Seattle-Tacoma International Airport") %>%
+      dplyr::mutate(concept="Airport Operations")
     
     ifelse(is.null(processed), processed <- t, processed <- dplyr::bind_rows(processed,t))
     rm(t)
