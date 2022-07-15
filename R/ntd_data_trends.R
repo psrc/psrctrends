@@ -95,3 +95,125 @@ process_ntd_monthly_data <- function() {
   return(processed)
   
 }
+
+#' Summarize Transit Data by Urbanized Area
+#'
+#' This function processes Transit Agency monthly data from the Nation Transit Database and aggregate to the Urbanized Areas.
+#' Data is pulled monthly from "https://www.transit.dot.gov/sites/fta.dot.gov/files/".
+#' 
+#' @param yr Four digit calendar year as string for Summary year
+#' @param pop.limit Population threshold to use to filter down Urbanized Areas - defaults to 1,000,000
+#' @param census.yr Four digit calendar year as string for Census Year for UZA population data - defaults to "2020"
+#' @return tibble in long form of Year to Date (or annual if it is a compelte year) Boardings and Revenue-Hours by Urbanized Area
+#' 
+#' @importFrom magrittr %<>% %>%
+#' @importFrom rlang .data
+#' 
+#' @examples
+#' 
+#' uza.data <- process_ntd_uza_data(yr="2022", census.yr="2020")
+#' 
+#' @export
+#'
+
+process_ntd_uza_data <- function(yr, pop.limit=1000000, census.yr="2020") {
+  
+  ntd.tabs <- c("UPT", "VRH")
+  
+  today <- Sys.Date()
+  c.yr <- lubridate::year(today)
+  c.mo <- formatC(as.integer(lubridate::month(today)), width=2, flag="0")
+  d.mo <- month.name[[as.integer(lubridate::month(today)) - 2]]
+  
+  data.url <- paste0("https://www.transit.dot.gov/sites/fta.dot.gov/files/",c.yr,"-",c.mo,"/",d.mo,"%20",c.yr,"%20Raw%20Database.xlsx")
+  
+  utils::download.file(data.url, "working.xlsx", quiet = TRUE, mode = "wb")
+  data.file <- paste0(getwd(),"/working.xlsx")
+  uza.file <- system.file('extdata', 'uaz_ua_codes.xlsx', package='psrctrends')
+  #uza.file <- paste0(getwd(),"/inst/extdata/uaz_ua_codes.xlsx")
+  
+  processed <- NULL
+  for (areas in ntd.tabs) {
+    
+    t <- dplyr::as_tibble(openxlsx::read.xlsx(data.file, sheet = areas, skipEmptyRows = TRUE, startRow = 1, colNames = TRUE)) %>%
+      dplyr::filter(.data$Modes!="DR") %>%
+      dplyr::select(-.data$`4.digit.NTD.ID`, -.data$`5.digit.NTD.ID`, -.data$Agency, -.data$Active, -.data$Reporter.Type, -.data$Modes, -.data$TOS, -.data$UZA) %>%
+      tidyr::pivot_longer(cols = -dplyr::contains("UZA"), names_to="date", values_to="estimate") %>%
+      tidyr::drop_na() %>%
+      dplyr::group_by(.data$UZA.Name,.data$date) %>%
+      dplyr::summarize(estimate=sum(.data$estimate)) %>%
+      dplyr::as_tibble() %>%
+      dplyr::filter(.data$UZA.Name != "Non-UZA") %>%
+      dplyr::mutate(concept=areas) %>%
+      dplyr::mutate(variable=dplyr::case_when(
+        .data$concept == "UPT" ~ "Total Boardings",
+        .data$concept == "VRM" ~ "Total Revenue-Miles",
+        .data$concept == "VRH" ~ "Total Revenue-Hours")) %>%
+      dplyr::mutate(concept="Transit by Urbanized Area") %>%
+      dplyr::mutate(year = as.character(2000 + as.integer(stringr::str_sub(.data$date, 4, 5)))) %>%
+      dplyr::mutate(month = formatC(match(stringr::str_to_title(stringr::str_sub(.data$date, 1, 3)), month.abb), width=2, flag="0")) %>%
+      dplyr::mutate(data_day=paste0(.data$year,"-",.data$month,"-01")) %>%
+      dplyr::mutate(data_day=lubridate::ymd(.data$data_day)) %>%
+      dplyr::mutate(equiv_day=paste0(c.yr,"-",.data$month,"-01")) %>%
+      dplyr::mutate(equiv_day=lubridate::ymd(.data$equiv_day)) %>%
+      dplyr::select(-.data$date) %>%
+      dplyr::filter(.data$year == yr)
+    
+    ifelse(is.null(processed), processed <- t, processed <- dplyr::bind_rows(processed,t))
+    rm(t)
+  }
+  
+  # Aggregate Data by UZA for Analysis Year
+  processed <- processed %>%
+    dplyr::select(-.data$month, -.data$data_day, -.data$equiv_day) %>%
+    dplyr::group_by(.data$UZA.Name, .data$variable, .data$concept, .data$year) %>%
+    dplyr::summarize(estimate=sum(.data$estimate)) %>%
+    dplyr::as_tibble()
+  
+  # Add in UZA Population for per Capita Metrics
+  u <- dplyr::as_tibble(openxlsx::read.xlsx(uza.file, sheet = "UZA_2010", skipEmptyRows = TRUE, startRow = 1, colNames = TRUE))
+  
+  ua.pop <- tidycensus::get_acs(geography = "urban area", year = as.integer(census.yr), variables = "B01001_001", survey="acs5") %>%
+    dplyr::select(.data$GEOID, .data$estimate) %>%
+    dplyr::rename(population=.data$estimate) %>%
+    dplyr::mutate(GEOID=as.integer(.data$GEOID))
+  
+  u <- dplyr::left_join(u, ua.pop, by=c("UACE"="GEOID"))
+  
+  processed <- dplyr::left_join(processed, u , by=c("UZA.Name")) %>%
+    dplyr::rename(geography=.data$UZA.Name) %>%
+    dplyr::select(-.data$UZA, -.data$UACE) 
+  
+  boardings <- processed %>% 
+    dplyr::filter(.data$variable == "Total Boardings") %>%
+    dplyr::filter(.data$population >=pop.limit | .data$geography=="Bremerton, WA") %>%
+    dplyr::select(-.data$population)
+  
+  per.capita <- processed %>% 
+    dplyr::filter(.data$variable == "Total Boardings") %>% 
+    dplyr::mutate(estimate = .data$estimate/.data$population) %>%
+    dplyr::mutate(variable = "Boardings per Capita") %>%
+    dplyr::filter(.data$population >=pop.limit | .data$geography=="Bremerton, WA") %>%
+    dplyr::select(-.data$population)
+  
+  revenue.hours <- processed %>% 
+    dplyr::filter(.data$variable == "Total Revenue-Hours") %>%
+    dplyr::filter(.data$population >=pop.limit | .data$geography=="Bremerton, WA") %>%
+    dplyr::select(-.data$population)
+  
+  hrs <- revenue.hours %>% 
+    dplyr::select(.data$geography,.data$estimate) %>%
+    dplyr::rename(hours=.data$estimate)
+  
+  rides.per.hr <- dplyr::left_join(boardings, hrs, by=c("geography")) %>%
+    dplyr::mutate(estimate = .data$estimate/.data$hours) %>%
+    dplyr::mutate(variable = "Boardings per Revenue Hour") %>%
+    dplyr::select(-.data$hours)
+  
+  final <- dplyr::bind_rows(list(boardings,revenue.hours,per.capita,rides.per.hr))
+  
+  file.remove(data.file)
+  
+  return(final)
+  
+}

@@ -24,5 +24,6 @@ Imports:
     stringr,
     lubridate,
     utils,
-    openxlsx
+    openxlsx,
+    tidycensus
 RoxygenNote: 7.2.0

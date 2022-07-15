@@ -2,6 +2,7 @@
 
 export(download_sea_operations_data)
 export(process_ntd_monthly_data)
+export(process_ntd_uza_data)
 export(process_qcew_monthly_msa)
 export(process_sea_operations_data)
 importFrom(magrittr,"%<>%")
