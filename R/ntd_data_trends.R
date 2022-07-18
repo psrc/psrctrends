@@ -216,11 +216,12 @@ process_ntd_uza_data <- function(yr, pop.limit=1000000, census.yr="2020") {
   
   final <- final %>%
     dplyr::mutate(plot_id = dplyr::case_when(
-      .data$geography %in% psrc.uza ~ "1",
-      .data$geography %in% sister.uza ~ "2",
-      .data$geography %in% big.uza ~ "3",
-      .data$geography %in% biggest.uza ~ "4")) %>%
-    dplyr::mutate(plot_id = tidyr::replace_na(.data$plot_id, "5"))
+      .data$geography %in% psrc.uza ~ "PSRC Urban Areas",
+      .data$geography %in% sister.uza ~ "Similar Urban Areas",
+      .data$geography %in% big.uza ~ "Larger Urban Areas",
+      .data$geography %in% biggest.uza ~ "Largest Urban Areas")) %>%
+    dplyr::mutate(plot_id = tidyr::replace_na(.data$plot_id, "Other Urban Areas")) %>%
+    dplyr::mutate(plot_id = stringr::str_wrap(.data$plot_id, width = 10))
   
   file.remove(data.file)
   
