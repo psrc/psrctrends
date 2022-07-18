@@ -185,20 +185,17 @@ process_ntd_uza_data <- function(yr, pop.limit=1000000, census.yr="2020") {
   
   boardings <- processed %>% 
     dplyr::filter(.data$variable == "Total Boardings") %>%
-    dplyr::filter(.data$population >=pop.limit | .data$geography=="Bremerton, WA") %>%
-    dplyr::select(-.data$population)
+    dplyr::filter(.data$population >=pop.limit | .data$geography=="Bremerton, WA")
   
   per.capita <- processed %>% 
     dplyr::filter(.data$variable == "Total Boardings") %>% 
     dplyr::mutate(estimate = .data$estimate/.data$population) %>%
     dplyr::mutate(variable = "Boardings per Capita") %>%
-    dplyr::filter(.data$population >=pop.limit | .data$geography=="Bremerton, WA") %>%
-    dplyr::select(-.data$population)
+    dplyr::filter(.data$population >=pop.limit | .data$geography=="Bremerton, WA")
   
   revenue.hours <- processed %>% 
     dplyr::filter(.data$variable == "Total Revenue-Hours") %>%
-    dplyr::filter(.data$population >=pop.limit | .data$geography=="Bremerton, WA") %>%
-    dplyr::select(-.data$population)
+    dplyr::filter(.data$population >=pop.limit | .data$geography=="Bremerton, WA")
   
   hrs <- revenue.hours %>% 
     dplyr::select(.data$geography,.data$estimate) %>%
@@ -210,6 +207,20 @@ process_ntd_uza_data <- function(yr, pop.limit=1000000, census.yr="2020") {
     dplyr::select(-.data$hours)
   
   final <- dplyr::bind_rows(list(boardings,revenue.hours,per.capita,rides.per.hr))
+  
+  # Create a plot ID column for ease of use for plotting
+  psrc.uza <- c("Seattle, WA","Bremerton, WA")
+  sister.uza <- c("Denver-Aurora, CO", "Detroit, MI", "Minneapolis-St. Paul, MN-WI", "Phoenix-Mesa, AZ", "Portland, OR-WA", "San Diego, CA", "San Francisco-Oakland, CA", "Tampa-St. Petersburg, FL")
+  big.uza <- c("Atlanta, GA", "Boston, MA-NH-RI","Dallas-Fort Worth-Arlington, TX", "Houston, TX", "Miami, FL", "Philadelphia, PA-NJ-DE-MD", "Washington, DC-VA-MD")
+  biggest.uza <- c("Chicago, IL-IN", "Los Angeles-Long Beach-Anaheim, CA", "New York-Newark, NY-NJ-CT")
+  
+  final <- final %>%
+    dplyr::mutate(plot_id = dplyr::case_when(
+      .data$geography %in% psrc.uza ~ "1",
+      .data$geography %in% sister.uza ~ "2",
+      .data$geography %in% big.uza ~ "3",
+      .data$geography %in% biggest.uza ~ "4")) %>%
+    dplyr::mutate(plot_id = tidyr::replace_na(.data$plot_id, "5"))
   
   file.remove(data.file)
   
