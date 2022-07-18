@@ -221,7 +221,7 @@ process_ntd_uza_data <- function(yr, pop.limit=1000000, census.yr="2020") {
       .data$geography %in% big.uza ~ "Larger Urban Areas",
       .data$geography %in% biggest.uza ~ "Largest Urban Areas")) %>%
     dplyr::mutate(plot_id = tidyr::replace_na(.data$plot_id, "Other Urban Areas")) %>%
-    dplyr::mutate(plot_id = stringr::str_wrap(.data$plot_id, width = 10))
+    dplyr::mutate(plot_id = stringr::str_wrap(.data$plot_id, width = 8))
   
   file.remove(data.file)
   
