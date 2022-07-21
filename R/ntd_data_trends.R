@@ -228,3 +228,60 @@ process_ntd_uza_data <- function(yr, pop.limit=1000000, census.yr="2020") {
   return(final)
   
 }
+
+#' Summarize Year to Date Transit Data by Mode and Operator
+#'
+#' This function processes Transit Agency monthly data from the Nation Transit Database and aggregate to year to date.
+#' Data is pulled monthly from "https://www.transit.dot.gov/sites/fta.dot.gov/files/".
+#' 
+#' @param c.yr Four digit calendar year as string for last year to analyze
+#' @param c.mo Month for analysis in year to date calculations if the latest month isn't desired - defaults to NULL
+#' @return tibble in long form of Year to Date (or annual if it is a complete year) of Trnasit Data by Mode and Operator
+#' 
+#' @importFrom magrittr %<>% %>%
+#' @importFrom rlang .data
+#' 
+#' @examples
+#' 
+#' ntd.ytd <- process_ntd_year_to_date_data(c.yr="2022")
+#' 
+#' @export
+#'
+process_ntd_year_to_date_data <- function(c.yr, c.mo=NULL) {
+  
+  # Step 1 - Get monthly data from NTD using package
+  monthly <- psrctrends::process_ntd_monthly_data()
+  
+  if (is.null(c.mo)) {
+    
+    latest.month <- monthly %>% 
+      dplyr::select(.data$data_day) %>% 
+      dplyr::filter(lubridate::year(.data$data_day) == c.yr) %>%
+      dplyr::filter(lubridate::month(.data$data_day) == max(lubridate::month(.data$data_day))) %>%
+      dplyr::distinct() %>%
+      dplyr::pull() %>%
+      lubridate::month()
+    
+    ytd <- monthly %>% 
+      dplyr::filter(.data$year <= c.yr) %>%
+      dplyr::filter(lubridate::month(.data$data_day) <= latest.month) %>%
+      dplyr::select(-.data$month, -.data$data_day, -.data$equiv_day) %>%
+      dplyr::group_by(.data$geography, .data$variable, .data$concept, .data$year) %>%
+      dplyr::summarise(estimate=sum(.data$estimate)) %>%
+      dplyr::as_tibble()
+    
+  } else {
+    
+    ytd <- monthly %>% 
+      dplyr::filter(.data$year <= c.yr) %>%
+      dplyr::filter(lubridate::month(.data$data_day) <= c.mo) %>%
+      dplyr::select(-.data$month, -.data$data_day, -.data$equiv_day) %>%
+      dplyr::group_by(.data$geography, .data$variable, .data$concept, .data$year) %>%
+      dplyr::summarise(estimate=sum(.data$estimate)) %>%
+      dplyr::as_tibble()
+  }
+  
+  
+  return(ytd)
+  
+}

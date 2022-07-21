@@ -25,5 +25,7 @@ Imports:
     lubridate,
     utils,
     openxlsx,
-    tidycensus
+    tidycensus,
+    DBI,
+    odbc
 RoxygenNote: 7.2.0
