@@ -2,6 +2,9 @@
 
 export(download_sea_operations_data)
 export(get_elmer_table)
+export(get_ofm_intercensal_population)
+export(get_ofm_postcensal_housing)
+export(get_ofm_postcensal_pop_change)
 export(process_ntd_monthly_data)
 export(process_ntd_uza_data)
 export(process_ntd_year_to_date_data)
