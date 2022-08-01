@@ -26,8 +26,18 @@ process_ntd_monthly_data <- function() {
   
   today <- Sys.Date()
   c.yr <- lubridate::year(today)
-  c.mo <- formatC(as.integer(lubridate::month(today)), width=2, flag="0")
-  d.mo <- month.name[[as.integer(lubridate::month(today)) - 2]]
+  c.dy <- lubridate::day(today)
+  
+  if(c.dy <= 15) {
+    c.mo <- formatC(as.integer(lubridate::month(today))-1, width=2, flag="0")
+    d.mo <- month.name[[as.integer(lubridate::month(today)) - 3]]
+    
+  } else {
+    
+    c.mo <- formatC(as.integer(lubridate::month(today)), width=2, flag="0")
+    d.mo <- month.name[[as.integer(lubridate::month(today)) - 2]]
+    
+  }
   
   data.url <- paste0("https://www.transit.dot.gov/sites/fta.dot.gov/files/",c.yr,"-",c.mo,"/",d.mo,"%20",c.yr,"%20Raw%20Database.xlsx")
   
@@ -122,8 +132,18 @@ process_ntd_uza_data <- function(yr, pop.limit=1000000, census.yr="2020") {
   
   today <- Sys.Date()
   c.yr <- lubridate::year(today)
-  c.mo <- formatC(as.integer(lubridate::month(today)), width=2, flag="0")
-  d.mo <- month.name[[as.integer(lubridate::month(today)) - 2]]
+  c.dy <- lubridate::day(today)
+  
+  if(c.dy <= 15) {
+    c.mo <- formatC(as.integer(lubridate::month(today))-1, width=2, flag="0")
+    d.mo <- month.name[[as.integer(lubridate::month(today)) - 3]]
+    
+  } else {
+    
+    c.mo <- formatC(as.integer(lubridate::month(today)), width=2, flag="0")
+    d.mo <- month.name[[as.integer(lubridate::month(today)) - 2]]
+    
+  }
   
   data.url <- paste0("https://www.transit.dot.gov/sites/fta.dot.gov/files/",c.yr,"-",c.mo,"/",d.mo,"%20",c.yr,"%20Raw%20Database.xlsx")
   
