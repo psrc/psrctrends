@@ -28,7 +28,7 @@ process_ntd_monthly_data <- function() {
   c.yr <- lubridate::year(today)
   c.dy <- lubridate::day(today)
   
-  if(c.dy <= 15) {
+  if(c.dy <= 7) {
     c.mo <- formatC(as.integer(lubridate::month(today))-1, width=2, flag="0")
     d.mo <- month.name[[as.integer(lubridate::month(today)) - 3]]
     
@@ -134,7 +134,7 @@ process_ntd_uza_data <- function(yr, pop.limit=1000000, census.yr="2020") {
   c.yr <- lubridate::year(today)
   c.dy <- lubridate::day(today)
   
-  if(c.dy <= 15) {
+  if(c.dy <= 7) {
     c.mo <- formatC(as.integer(lubridate::month(today))-1, width=2, flag="0")
     d.mo <- month.name[[as.integer(lubridate::month(today)) - 3]]
     
