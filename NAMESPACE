@@ -2,9 +2,7 @@
 
 export(download_sea_operations_data)
 export(get_elmer_table)
-export(get_ev_registrations_city)
-export(get_ev_registrations_county)
-export(get_ev_registrations_county_ytd)
+export(get_ev_registration)
 export(get_ofm_intercensal_population)
 export(get_ofm_postcensal_housing)
 export(get_ofm_postcensal_pop_change)

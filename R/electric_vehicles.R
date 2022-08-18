@@ -1,54 +1,10 @@
-#' Summarize Electric Vehicle Registrations by City & Year
-#'
-#' This function pulls and cleans data from the Washington State Registration Data.
-#' Data is originally pulled from https://www.atlasevhub.com/materials/state-ev-registration-data/#data
-#' 
-#' @param ev.url Location of the registration data from Washington State - defaults to X drive 
-#' @return tibble of electric vehicle registrations by year and city
-#' 
-#' @importFrom magrittr %<>% %>%
-#' @importFrom rlang .data
-#' 
-#' @examples
-#' 
-#' ev_city <- get_ev_registrations_city(ev.url = "C:/Users/chelmann/OneDrive - Puget Sound Regional Council/data-downloads/wa_ev_registrations_public.csv")
-#' 
-#' @export
-#'
-get_ev_registrations_city <- function (ev.url="X:/DSA/psrc-trends-data/ev-registrations/wa_ev_registrations_public.csv") {
-  
-  # Electric Vehicle Registrations in Washington State
-  url <- ev.url
-  ev.regs <- dplyr::as_tibble(data.table::fread(url)) %>%
-    stats::setNames(c("vehid","zipcode","registration_date","vin_prefix","vin_model_yr","dmv_id","dmv_id_comp","dmv_snap","exp", "st", "geo","vehicle_name","technology")) %>%
-    dplyr::select(.data$vehid, .data$zipcode, .data$registration_date, .data$vehicle_name, .data$technology) %>%
-    dplyr::mutate(year = lubridate::year(.data$registration_date))
-  
-  # Zipcodes
-  url <- "X:/DSA/psrc-trends-data/ev-registrations/wa-zipcodes.csv"
-  zips <- dplyr::as_tibble(data.table::fread(url)) %>% 
-    dplyr::filter(.data$psrc==1) %>%
-    dplyr::select(-.data$psrc) %>%
-    dplyr::mutate(zipcode=as.character(.data$zipcode))
-  
-  # Join with zipcodes to get registrations by PSRC Counties
-  ev.regs <- dplyr::left_join(ev.regs, zips, by=c("zipcode")) %>%
-    tidyr::drop_na() %>%
-    dplyr::select(.data$city, .data$technology, .data$year) %>%
-    dplyr::mutate(registrations=1) %>%
-    dplyr::group_by(.data$city, .data$technology, .data$year) %>%
-    dplyr::summarise(registrations=sum(.data$registrations))
-  
-  return(ev.regs)
-  
-}
-
 #' Summarize Electric Vehicle Registrations by County & Year
 #'
 #' This function pulls and cleans data from the Washington State Registration Data.
-#' Data is originally pulled from https://www.atlasevhub.com/materials/state-ev-registration-data/#data
+#' Data is originally pulled from https://data.wa.gov/ via the Socrata API
 #' 
-#' @param ev.url Location of the registration data from Washington State - defaults to X drive 
+#' @param states List of States by two digit code to keep - defaults to WA 
+#' @param counties List of County Names to keep - defaults to PSRC counties
 #' @return tibble of electric vehicle registrations by year and county
 #' 
 #' @importFrom magrittr %<>% %>%
@@ -56,109 +12,42 @@ get_ev_registrations_city <- function (ev.url="X:/DSA/psrc-trends-data/ev-regist
 #' 
 #' @examples
 #' 
-#' ev_county <- get_ev_registrations_county(ev.url = "C:/Users/chelmann/OneDrive - Puget Sound Regional Council/data-downloads/wa_ev_registrations_public.csv")
+#' ev_registration <- get_ev_registration()
 #' 
 #' @export
 #'
-get_ev_registrations_county <- function (ev.url="X:/DSA/psrc-trends-data/ev-registrations/wa_ev_registrations_public.csv") {
+get_ev_registration <- function(states=c("WA"),counties=c("King","Kitsap","Pierce","Snohomish")) {
   
-  # Electric Vehicle Registrations in Washington State
-  url <- ev.url
-  ev.regs <- dplyr::as_tibble(data.table::fread(url)) %>%
-    stats::setNames(c("vehid","zipcode","registration_date","vin_prefix","vin_model_yr","dmv_id","dmv_id_comp","dmv_snap","exp", "st", "geo","vehicle_name","technology")) %>%
-    dplyr::select(.data$vehid, .data$zipcode, .data$registration_date, .data$vehicle_name, .data$technology) %>%
-    dplyr::mutate(year = lubridate::year(.data$registration_date))
+  numeric_cols <- c("BEV","PHEV","EV","NEV","TOT")
   
-  # Zipcodes
-  url <- "X:/DSA/psrc-trends-data/ev-registrations/wa-zipcodes.csv"
-  zips <- dplyr::as_tibble(data.table::fread(url)) %>% 
-    dplyr::filter(.data$psrc==1) %>%
-    dplyr::select(-.data$psrc) %>%
-    dplyr::mutate(zipcode=as.character(.data$zipcode))
+  d <- dplyr::as_tibble(RSocrata::read.socrata("https://data.wa.gov/resource/3d5d-sdqb.json", 
+                                               app_token = "plpj1IICGOhTVjmebF1kls9Cf")) %>%
+    dplyr::mutate(date = lubridate::ymd(.data$date)) %>%
+    dplyr::filter(.data$state %in% states & .data$county %in% counties) %>%
+    dplyr::select(-.data$percent_electric_vehicles) %>%
+    dplyr::rename(BEV=.data$battery_electric_vehicles_bevs_) %>%
+    dplyr::rename(PHEV=.data$plug_in_hybrid_electric_vehicles_phevs_) %>%
+    dplyr::rename(EV=.data$electric_vehicle_ev_total) %>%
+    dplyr::rename(NEV=.data$non_electric_vehicles) %>%
+    dplyr::rename(TOT=.data$total_vehicles) %>%
+    dplyr::rename(VEH_TYPE=.data$vehicle_primary_use) %>%
+    dplyr::mutate_at(numeric_cols, as.numeric) 
   
-  # Join with zipcodes to get registrations by PSRC Counties
-  ev.regs <- dplyr::left_join(ev.regs, zips, by=c("zipcode")) %>%
-    tidyr::drop_na() %>%
-    dplyr::select(.data$county, .data$technology, .data$year) %>%
-    dplyr::mutate(registrations=1) %>%
-    dplyr::group_by(.data$county, .data$technology, .data$year) %>%
-    dplyr::summarise(registrations=sum(.data$registrations))
+  r <- d %>%
+    dplyr::group_by(.data$date, .data$VEH_TYPE) %>%
+    dplyr::summarise(dplyr::across(numeric_cols, sum)) %>%
+    dplyr::mutate(county="PSRC Region", state="WA")
   
-  # Create Region Total
-  region <- ev.regs %>%
-    dplyr::select(-.data$county) %>%
-    dplyr::group_by(.data$technology, .data$year) %>%
-    dplyr::summarise(registrations=sum(.data$registrations)) %>%
-    dplyr::as_tibble() %>%
-    dplyr::mutate(county="Region")
+  d <- dplyr::bind_rows(d,r)
   
-  # Join Region
-  ev.regs <- dplyr::bind_rows(ev.regs, region) %>%
-    dplyr::mutate(year=as.character(.data$year))
+  t <- d %>%
+    dplyr::group_by(.data$date, .data$county, .data$state) %>%
+    dplyr::summarise(dplyr::across(numeric_cols, sum)) %>%
+    dplyr::mutate(VEH_TYPE="Total")
   
-  return(ev.regs)
+  d <- dplyr::bind_rows(d,t) %>%
+    dplyr::mutate(share=.data$EV/.data$TOT)
   
-}
-
-#' Summarize Electric Vehicle Registrations by County & Year to Date
-#'
-#' This function pulls and cleans data from the Washington State Registration Data.
-#' Data is originally pulled from https://www.atlasevhub.com/materials/state-ev-registration-data/#data
-#' 
-#' @param ev.url Location of the registration data from Washington State - defaults to X drive 
-#' @return tibble of electric vehicle registrations by year to date and county for latest month in dataset
-#' 
-#' @importFrom magrittr %<>% %>%
-#' @importFrom rlang .data
-#' 
-#' @examples
-#' 
-#' ev.county.ytd <- get_ev_registrations_county_ytd(ev.url = "C:/Users/chelmann/OneDrive - Puget Sound Regional Council/data-downloads/wa_ev_registrations_public.csv")
-#' 
-#' @export
-#'
-get_ev_registrations_county_ytd <- function (ev.url="X:/DSA/psrc-trends-data/ev-registrations/wa_ev_registrations_public.csv") {
-  
-  # Electric Vehicle Registrations in Washington State
-  url <- ev.url
-  ev.regs <- dplyr::as_tibble(data.table::fread(url)) %>%
-    stats::setNames(c("vehid","zipcode","registration_date","vin_prefix","vin_model_yr","dmv_id","dmv_id_comp","dmv_snap","exp", "st", "geo","vehicle_name","technology")) %>%
-    dplyr::select(.data$vehid, .data$zipcode, .data$registration_date, .data$vehicle_name, .data$technology) %>%
-    dplyr::mutate(year = lubridate::year(.data$registration_date)) %>% 
-    dplyr::mutate(month = lubridate::month(.data$registration_date))
-  
-  # Figure out the latest date for Year to Date Calculations
-  max.yr <- ev.regs %>% dplyr::select(.data$year) %>% max() 
-  max.mo <- ev.regs %>% dplyr::filter(.data$year==max.yr) %>% dplyr::select(.data$month) %>% max()
-  ev.regs <- ev.regs %>% dplyr::filter(.data$month <= max.mo)
-  
-  # Zipcodes
-  url <- "X:/DSA/psrc-trends-data/ev-registrations/wa-zipcodes.csv"
-  zips <- dplyr::as_tibble(data.table::fread(url)) %>% 
-    dplyr::filter(.data$psrc==1) %>%
-    dplyr::select(-.data$psrc) %>%
-    dplyr::mutate(zipcode=as.character(.data$zipcode))
-  
-  # Join with zipcodes to get registrations by PSRC Counties
-  ev.regs <- dplyr::left_join(ev.regs, zips, by=c("zipcode")) %>%
-    tidyr::drop_na() %>%
-    dplyr::select(.data$county, .data$technology, .data$year) %>%
-    dplyr::mutate(registrations=1) %>%
-    dplyr::group_by(.data$county, .data$technology, .data$year) %>%
-    dplyr::summarise(registrations=sum(.data$registrations))
-  
-  # Create Region Total
-  region <- ev.regs %>%
-    dplyr::select(-.data$county) %>%
-    dplyr::group_by(.data$technology, .data$year) %>%
-    dplyr::summarise(registrations=sum(.data$registrations)) %>%
-    dplyr::as_tibble() %>%
-    dplyr::mutate(county="Region")
-  
-  # Join Region
-  ev.regs <- dplyr::bind_rows(ev.regs, region) %>%
-    dplyr::mutate(year=as.character(.data$year))
-  
-  return(ev.regs)
+  return(d)
   
 }
