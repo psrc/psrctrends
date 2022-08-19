@@ -129,3 +129,43 @@ get_ev_registration_ytd <- function(yrs=NULL, mos=NULL, st=c("WA"), ct=c("King",
   return(d)
   
 }
+
+#' Summarize Electric Vehicle Registrations for Calendar Year
+#'
+#' This function pulls and cleans data from the Washington State Registration Data.
+#' Data is originally pulled from https://data.wa.gov/ via the Socrata API
+#' 
+#' @param st List of States by two digit code to keep - defaults to WA 
+#' @param ct List of County Names to keep - defaults to PSRC counties
+#' @return tibble of vehicle registrations by year for selected month
+#' 
+#' @importFrom magrittr %<>% %>%
+#' @importFrom rlang .data
+#' 
+#' @examples
+#' 
+#' ev_registration_yearend <- get_ev_registration_annual()
+#' 
+#' @export
+#'
+get_ev_registration_annual <- function(st=c("WA"), ct=c("King","Kitsap","Pierce","Snohomish")) {
+  
+  numeric_cols <- c("BEV","PHEV","EV","NEV","TOT")
+  d <- psrctrends::get_ev_registration_monthly(st,ct)
+  
+  d <- d %>% dplyr::filter(lubridate::month(.data$date)==12)
+  
+  min.date <- d %>% dplyr::select(.data$date) %>% dplyr::pull() %>% min()
+  
+  d <- d %>%
+    dplyr::arrange(.data$county, .data$variable, .data$date) %>%
+    dplyr::mutate(delta = .data$EV - dplyr::lag(.data$EV)) %>%
+    dplyr::mutate(delta = dplyr::case_when(
+      .data$date == min.date ~ 0,
+      .data$date != min.date ~ .data$delta))
+  
+  d <- dplyr::na_if(d,0)
+  
+  return(d)
+  
+}

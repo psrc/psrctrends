@@ -2,6 +2,7 @@
 
 export(download_sea_operations_data)
 export(get_elmer_table)
+export(get_ev_registration_annual)
 export(get_ev_registration_monthly)
 export(get_ev_registration_ytd)
 export(get_ofm_intercensal_population)
