@@ -17,6 +17,6 @@ This function calculates the Share of Commute trips that take at least 1 hour by
 }
 \examples{
 
-mpo_hour_commutes <- calculate_mpo_long_tt_share(census.yr=2018)
+mpo_hour_commutes <- calculate_mpo_long_tt_share(census.yr=2017)
 
 }

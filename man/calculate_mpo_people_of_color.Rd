@@ -17,6 +17,6 @@ This function calculates people of color by 27 Regional Planning Entities.
 }
 \examples{
 
-mpo_poc <- calculate_mpo_people_of_color(census.yr=2018)
+mpo_people_of_color <- calculate_mpo_people_of_color(census.yr=2018)
 
 }
