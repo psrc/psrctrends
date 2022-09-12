@@ -29,5 +29,6 @@ Imports:
     tidycensus,
     DBI,
     odbc,
-    RSocrata
+    RSocrata,
+    readr
 RoxygenNote: 7.2.0
