@@ -256,7 +256,7 @@ process_ntd_uza_data <- function(yr, pop.limit=1000000, census.yr="2020") {
 #' 
 #' @param c.yr Four digit calendar year as string for last year to analyze
 #' @param c.mo Month for analysis in year to date calculations if the latest month isn't desired - defaults to NULL
-#' @return tibble in long form of Year to Date (or annual if it is a complete year) of Trnasit Data by Mode and Operator
+#' @return tibble in long form of Year to Date (or annual if it is a complete year) of Transit Data by Mode and Operator
 #' 
 #' @importFrom magrittr %<>% %>%
 #' @importFrom rlang .data

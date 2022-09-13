@@ -12,7 +12,7 @@ process_ntd_year_to_date_data(c.yr, c.mo = NULL)
 \item{c.mo}{Month for analysis in year to date calculations if the latest month isn't desired - defaults to NULL}
 }
 \value{
-tibble in long form of Year to Date (or annual if it is a complete year) of Trnasit Data by Mode and Operator
+tibble in long form of Year to Date (or annual if it is a complete year) of Transit Data by Mode and Operator
 }
 \description{
 This function processes Transit Agency monthly data from the Nation Transit Database and aggregate to year to date.
