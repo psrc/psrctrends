@@ -3,6 +3,7 @@
 #' This function calculates people of color by 27 Regional Planning Entities.
 #' 
 #' @param census.yr Four digit integer for Census year for data - defaults to 2020
+#' @param acs.type String of "acs1" or "acs5" for which ACS type to use - defaults to "acs5"
 #' @return tibble of population and people of color by Regional Entity
 #' 
 #' @importFrom magrittr %<>% %>%
@@ -14,7 +15,7 @@
 #' 
 #' @export
 #'
-calculate_mpo_people_of_color <- function(census.yr=2020) {
+calculate_mpo_people_of_color <- function(census.yr=2020, acs.type="acs5") {
   
   mpo.file <- system.file('extdata', 'regional-councils-counties.csv', package='psrctrends')
   
@@ -34,7 +35,7 @@ calculate_mpo_people_of_color <- function(census.yr=2020) {
   mpo_county_data <- NULL
   for (st in states) {
     c <- mpo %>% dplyr::filter(.data$STATE_FIPS %in% st) %>% dplyr::select(.data$COUNTY_FIPS) %>% dplyr::pull()
-    d <- tidycensus::get_acs(geography = "county", state=st, county=c, variables = census.variables, year = census.yr, survey = "acs5") %>% dplyr::select(-.data$moe)
+    d <- tidycensus::get_acs(geography = "county", state=st, county=c, variables = census.variables, year = census.yr, survey = acs.type) %>% dplyr::select(-.data$moe)
     ifelse(is.null(mpo_county_data), mpo_county_data <- d, mpo_county_data <- dplyr::bind_rows(mpo_county_data,d))
   }
   
@@ -70,6 +71,7 @@ calculate_mpo_people_of_color <- function(census.yr=2020) {
 #' This function calculates the Non-SOV Mode Share by 27 Regional Planning Entities.
 #' 
 #' @param census.yr Four digit integer for Census year for data - defaults to 2020
+#' @param acs.type String of "acs1" or "acs5" for which ACS type to use - defaults to "acs5"
 #' @return tibble of commute trips and non-sov trips by Regional Entity
 #' 
 #' @importFrom magrittr %<>% %>%
@@ -81,7 +83,7 @@ calculate_mpo_people_of_color <- function(census.yr=2020) {
 #' 
 #' @export
 #'
-calculate_mpo_nonsov_share <- function(census.yr=2020) {
+calculate_mpo_nonsov_share <- function(census.yr=2020, acs.type="acs5") {
   
   mpo.file <- system.file('extdata', 'regional-councils-counties.csv', package='psrctrends')
   
@@ -101,7 +103,7 @@ calculate_mpo_nonsov_share <- function(census.yr=2020) {
   mpo_county_data <- NULL
   for (st in states) {
     c <- mpo %>% dplyr::filter(.data$STATE_FIPS %in% st) %>% dplyr::select(.data$COUNTY_FIPS) %>% dplyr::pull()
-    d <- tidycensus::get_acs(geography = "county", state=st, county=c, variables = census.variables, year = census.yr, survey = "acs5") %>% dplyr::select(-.data$moe)
+    d <- tidycensus::get_acs(geography = "county", state=st, county=c, variables = census.variables, year = census.yr, survey = acs.type) %>% dplyr::select(-.data$moe)
     ifelse(is.null(mpo_county_data), mpo_county_data <- d, mpo_county_data <- dplyr::bind_rows(mpo_county_data,d))
   }
   
@@ -137,6 +139,7 @@ calculate_mpo_nonsov_share <- function(census.yr=2020) {
 #' This function calculates the Share of Commute trips that take at least 1 hour by 27 Regional Planning Entities.
 #' 
 #' @param census.yr Four digit integer for Census year for data - defaults to 2020
+#' @param acs.type String of "acs1" or "acs5" for which ACS type to use - defaults to "acs5"
 #' @return tibble of long commute trips by Regional Entity
 #' 
 #' @importFrom magrittr %<>% %>%
@@ -148,7 +151,7 @@ calculate_mpo_nonsov_share <- function(census.yr=2020) {
 #' 
 #' @export
 #'
-calculate_mpo_long_tt_share <- function(census.yr=2020) {
+calculate_mpo_long_tt_share <- function(census.yr=2020, acs.type="acs5") {
   
   mpo.file <- system.file('extdata', 'regional-councils-counties.csv', package='psrctrends')
   
@@ -168,7 +171,7 @@ calculate_mpo_long_tt_share <- function(census.yr=2020) {
   mpo_county_data <- NULL
   for (st in states) {
     c <- mpo %>% dplyr::filter(.data$STATE_FIPS %in% st) %>% dplyr::select(.data$COUNTY_FIPS) %>% dplyr::pull()
-    d <- tidycensus::get_acs(geography = "county", state=st, county=c, variables = census.variables, year = census.yr, survey = "acs5") %>% dplyr::select(-.data$moe)
+    d <- tidycensus::get_acs(geography = "county", state=st, county=c, variables = census.variables, year = census.yr, survey = acs.type) %>% dplyr::select(-.data$moe)
     ifelse(is.null(mpo_county_data), mpo_county_data <- d, mpo_county_data <- dplyr::bind_rows(mpo_county_data,d))
   }
   
@@ -204,6 +207,7 @@ calculate_mpo_long_tt_share <- function(census.yr=2020) {
 #' This function calculates the Share of Home Ownership by 27 Regional Planning Entities.
 #' 
 #' @param census.yr Four digit integer for Census year for data - defaults to 2020
+#' @param acs.type String of "acs1" or "acs5" for which ACS type to use - defaults to "acs5"
 #' @return tibble of home ownership shares by Regional Entity
 #' 
 #' @importFrom magrittr %<>% %>%
@@ -215,7 +219,7 @@ calculate_mpo_long_tt_share <- function(census.yr=2020) {
 #' 
 #' @export
 #'
-calculate_mpo_ownership_share <- function(census.yr=2020) {
+calculate_mpo_ownership_share <- function(census.yr=2020, acs.type="acs5") {
   
   mpo.file <- system.file('extdata', 'regional-councils-counties.csv', package='psrctrends')
   
@@ -235,7 +239,7 @@ calculate_mpo_ownership_share <- function(census.yr=2020) {
   mpo_county_data <- NULL
   for (st in states) {
     c <- mpo %>% dplyr::filter(.data$STATE_FIPS %in% st) %>% dplyr::select(.data$COUNTY_FIPS) %>% dplyr::pull()
-    d <- tidycensus::get_acs(geography = "county", state=st, county=c, variables = census.variables, year = census.yr, survey = "acs5") %>% dplyr::select(-.data$moe)
+    d <- tidycensus::get_acs(geography = "county", state=st, county=c, variables = census.variables, year = census.yr, survey = acs.type) %>% dplyr::select(-.data$moe)
     ifelse(is.null(mpo_county_data), mpo_county_data <- d, mpo_county_data <- dplyr::bind_rows(mpo_county_data,d))
   }
   

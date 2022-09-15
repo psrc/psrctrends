@@ -4,10 +4,12 @@
 \alias{calculate_mpo_ownership_share}
 \title{Home Ownership by Regional Planning Entity}
 \usage{
-calculate_mpo_ownership_share(census.yr = 2020)
+calculate_mpo_ownership_share(census.yr = 2020, acs.type = "acs5")
 }
 \arguments{
 \item{census.yr}{Four digit integer for Census year for data - defaults to 2020}
+
+\item{acs.type}{String of "acs1" or "acs5" for which ACS type to use - defaults to "acs5"}
 }
 \value{
 tibble of home ownership shares by Regional Entity
