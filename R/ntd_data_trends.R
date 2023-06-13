@@ -39,7 +39,7 @@ process_ntd_monthly_data <- function() {
     
   }
   
-  data.url <- paste0("https://www.transit.dot.gov/sites/fta.dot.gov/files/",c.yr,"-",c.mo,"/",d.mo,"%20",c.yr,"%20Raw%20Database.xlsx")
+  data.url <- paste0("https://www.transit.dot.gov/sites/fta.dot.gov/files/",c.yr,"-",c.mo,"/",d.mo,"%20",c.yr,"%20Raw%20Monthly%20Ridership%20%28no%20adjustments%20or%20estimates%29_0.xlsx")
   
   utils::download.file(data.url, "working.xlsx", quiet = TRUE, mode = "wb")
   data.file <- paste0(getwd(),"/working.xlsx")
