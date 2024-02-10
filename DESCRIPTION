@@ -14,9 +14,7 @@ License: GPL-3 + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Imports: 
-    magrittr,
     rlang,
-    tidyselect,
     readxl,
     dplyr,
     purrr,
@@ -26,9 +24,8 @@ Imports:
     lubridate,
     utils,
     openxlsx,
-    tidycensus,
-    DBI,
-    odbc,
     RSocrata,
-    readr
+    readr,
+    psrcelmer,
+    tibble
 RoxygenNote: 7.2.3

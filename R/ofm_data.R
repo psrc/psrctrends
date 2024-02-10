@@ -4,38 +4,38 @@
 #' 
 #' @return tibble of population by jurisdiction
 #' 
-#' @importFrom magrittr %<>% %>%
 #' @importFrom rlang .data
 #' 
 #' @examples
-#' 
-#' ofm.data <- get_ofm_intercensal_population()
+#' \dontrun{
+#' population_data <- get_population_data()}
 #' 
 #' @export
 #'
-get_ofm_intercensal_population <-function () {
+get_population_data <- function(){
+  
+  # Silence the dplyr summarize message
+  options(dplyr.summarise.inform = FALSE)
   
   # Jurisdictions with Regional Geography
-  jurisdictions <- psrctrends::get_elmer_table("Political.jurisdiction_dims")
+  jurisdictions <- psrcelmer::get_table(schema='Political', tbl_name='jurisdiction_dims')
   
-  jurisdictions <- jurisdictions %>%
-    dplyr::mutate(juris_name = gsub("Seatac","SeaTac",.data$juris_name)) %>%
-    dplyr::mutate(juris_name = gsub("Beau Arts Village","Beaux Arts Village",.data$juris_name)) %>%
-    dplyr::select(.data$juris_name, .data$regional_geography, .data$airport_affected) %>%
-    dplyr::distinct() %>%
-    dplyr::mutate(regional_geography=gsub("HCT","High Capacity Transit Community",.data$regional_geography)) %>%
-    dplyr::mutate(regional_geography=gsub("Metro","Metropolitan Cities",.data$regional_geography)) %>%
-    dplyr::mutate(regional_geography=gsub("Core","Core Cities",.data$regional_geography)) %>%
-    dplyr::mutate(regional_geography=gsub("CitiesTowns","Cities & Towns",.data$regional_geography)) %>%
-    dplyr::select(-.data$airport_affected)%>%
-    dplyr::mutate(juris_name = gsub("Uninc. King", "King County", .data$juris_name)) %>%
-    dplyr::mutate(juris_name = gsub("Uninc. Kitsap", "Kitsap County", .data$juris_name)) %>%
-    dplyr::mutate(juris_name = gsub("Uninc. Pierce", "Pierce County", .data$juris_name)) %>%
+  jurisdictions <- jurisdictions |>
+    dplyr::mutate(juris_name = gsub("Seatac","SeaTac",.data$juris_name)) |>
+    dplyr::mutate(juris_name = gsub("Beau Arts Village","Beaux Arts Village",.data$juris_name)) |>
+    dplyr::select("juris_name", "regional_geography", "airport_affected") |>
+    dplyr::distinct() |>
+    dplyr::mutate(regional_geography=gsub("HCT","High Capacity Transit Community",.data$regional_geography)) |>
+    dplyr::mutate(regional_geography=gsub("Metro","Metropolitan Cities",.data$regional_geography)) |>
+    dplyr::mutate(regional_geography=gsub("Core","Core Cities",.data$regional_geography)) |>
+    dplyr::mutate(regional_geography=gsub("CitiesTowns","Cities & Towns",.data$regional_geography)) |>
+    dplyr::select(-"airport_affected") |>
+    dplyr::mutate(juris_name = gsub("Uninc. King", "King County", .data$juris_name)) |>
+    dplyr::mutate(juris_name = gsub("Uninc. Kitsap", "Kitsap County", .data$juris_name)) |>
+    dplyr::mutate(juris_name = gsub("Uninc. Pierce", "Pierce County", .data$juris_name)) |>
     dplyr::mutate(juris_name = gsub("Uninc. Snohomish", "Snohomish County", .data$juris_name))
   
-  # Population
-  
-  # Intercensal estimates since 2020 data is now available
+  # Intercensal estimates
   ofm.url.1990 <- "https://ofm.wa.gov/sites/default/files/public/dataresearch/pop/april1/hseries/ofm_april1_intercensal_estimates_1990-2000.xlsx"
   ofm.url.2000 <- "https://ofm.wa.gov/sites/default/files/public/dataresearch/pop/april1/hseries/ofm_april1_intercensal_estimates_2000-2010.xlsx"
   ofm.url.2010 <- "https://ofm.wa.gov/sites/default/files/public/dataresearch/pop/april1/hseries/ofm_april1_intercensal_estimates_2010_2020.xlsx"
@@ -45,97 +45,97 @@ get_ofm_intercensal_population <-function () {
   utils::download.file(ofm.url.1990, "working.xlsx", quiet = TRUE, mode = "wb")
   ofm.pop.file <- paste0(getwd(),"/working.xlsx")
   
-  ofm.pop.90 <- dplyr::as_tibble(openxlsx::read.xlsx(ofm.pop.file, detectDates = FALSE, skipEmptyRows = TRUE, startRow = 1, colNames = TRUE, sheet = "Total Population ")) %>%
-    dplyr::filter(.data$County.Name %in% c("King","Kitsap","Pierce","Snohomish")) %>%
-    tidyr::pivot_longer(cols=dplyr::contains("Population"), names_to="Year", values_to="Estimate") %>%
-    dplyr::select(-(dplyr::contains("Place.Code")), -.data$Jurisdiction) %>%
-    dplyr::mutate(Year = stringr::str_replace(.data$Year, ".Total.Population.*", ""), City.Name = stringr::str_replace(.data$City.Name, " \\(part\\)", "")) %>%
-    dplyr::mutate(dplyr::across(c('Filter','Year','Estimate'), as.numeric)) %>%
-    dplyr::rename(County=.data$County.Name, Jurisdiction=.data$City.Name) %>%
-    dplyr::filter(.data$Year != 2000) %>%
+  ofm.pop.90 <- dplyr::as_tibble(openxlsx::read.xlsx(ofm.pop.file, detectDates = FALSE, skipEmptyRows = TRUE, startRow = 1, colNames = TRUE, sheet = "Total Population ")) |>
+    dplyr::filter(.data$County.Name %in% c("King","Kitsap","Pierce","Snohomish")) |>
+    tidyr::pivot_longer(cols=dplyr::contains("Population"), names_to="Year", values_to="Estimate") |>
+    dplyr::select(-(dplyr::contains("Place.Code")), -"Jurisdiction") |>
+    dplyr::mutate(Year = stringr::str_replace(.data$Year, ".Total.Population.*", ""), City.Name = stringr::str_replace(.data$City.Name, " \\(part\\)", "")) |>
+    dplyr::mutate(dplyr::across(c('Filter','Year','Estimate'), as.numeric)) |>
+    dplyr::rename(County="County.Name", Jurisdiction="City.Name") |>
+    dplyr::filter(.data$Year != 2000) |>
     dplyr::mutate(Jurisdiction = dplyr::case_when(
       .data$Filter == 1 ~ paste0(.data$County," County"),
       .data$Filter == 2 ~ paste0(.data$Jurisdiction," ", .data$County, " County"),
       .data$Filter == 3 ~ paste0(.data$Jurisdiction," ", .data$County," County"),
-      .data$Filter == 4 ~ .data$Jurisdiction)) %>%
-    dplyr::mutate(Jurisdiction = stringr::str_replace(.data$Jurisdiction, "Beaux Arts", "Beaux Arts Village")) %>%
-    dplyr::mutate(Jurisdiction = stringr::str_replace(.data$Jurisdiction, "Du Pont", "DuPont")) %>%
+      .data$Filter == 4 ~ .data$Jurisdiction)) |>
+    dplyr::mutate(Jurisdiction = stringr::str_replace(.data$Jurisdiction, "Beaux Arts", "Beaux Arts Village")) |>
+    dplyr::mutate(Jurisdiction = stringr::str_replace(.data$Jurisdiction, "Du Pont", "DuPont")) |>
     dplyr::mutate(Jurisdiction = stringr::str_trim(.data$Jurisdiction, side = c("both")))
   
   # 2000 to 2010
   utils::download.file(ofm.url.2000, "working.xlsx", quiet = TRUE, mode = "wb")
   ofm.pop.file <- paste0(getwd(),"/working.xlsx")
   
-  ofm.pop.00 <- dplyr::as_tibble(openxlsx::read.xlsx(ofm.pop.file, detectDates = FALSE, skipEmptyRows = TRUE, startRow = 1, colNames = TRUE, sheet = "Total Population")) %>%
-    dplyr::filter(.data$County.Name %in% c("King","Kitsap","Pierce","Snohomish")) %>%
-    tidyr::pivot_longer(cols=dplyr::contains("Population"), names_to="Year", values_to="Estimate") %>%
-    dplyr::select(-(dplyr::contains("Place.Code")), -.data$Jurisdiction) %>%
-    dplyr::mutate(Year = stringr::str_replace(.data$Year, ".Total.Population.*", ""), Year = stringr::str_replace(.data$Year, ".Intercensal.*", ""), City.Name = stringr::str_replace(.data$City.Name, " \\(part\\)", "")) %>%
-    dplyr::mutate(dplyr::across(c('Filter','Year','Estimate'), as.numeric)) %>%
-    dplyr::rename(County=.data$County.Name, Jurisdiction=.data$City.Name)%>%
-    dplyr::filter(.data$Year != 2010) %>%
-    dplyr::select(-.data$Line) %>%
+  ofm.pop.00 <- dplyr::as_tibble(openxlsx::read.xlsx(ofm.pop.file, detectDates = FALSE, skipEmptyRows = TRUE, startRow = 1, colNames = TRUE, sheet = "Total Population")) |>
+    dplyr::filter(.data$County.Name %in% c("King","Kitsap","Pierce","Snohomish")) |>
+    tidyr::pivot_longer(cols=dplyr::contains("Population"), names_to="Year", values_to="Estimate") |>
+    dplyr::select(-(dplyr::contains("Place.Code")), -"Jurisdiction") |>
+    dplyr::mutate(Year = stringr::str_replace(.data$Year, ".Total.Population.*", ""), Year = stringr::str_replace(.data$Year, ".Intercensal.*", ""), City.Name = stringr::str_replace(.data$City.Name, " \\(part\\)", "")) |>
+    dplyr::mutate(dplyr::across(c('Filter','Year','Estimate'), as.numeric)) |>
+    dplyr::rename(County="County.Name", Jurisdiction="City.Name") |>
+    dplyr::filter(.data$Year != 2010) |>
+    dplyr::select(-"Line") |>
     dplyr::mutate(Jurisdiction = dplyr::case_when(
       Filter == 1 ~ .data$Jurisdiction,
       Filter == 2 ~ paste0(.data$Jurisdiction," ", .data$County, " County"),
       Filter == 3 ~ paste0(.data$Jurisdiction," ", .data$County, " County"),
-      Filter == 4 ~ .data$Jurisdiction)) %>%
+      Filter == 4 ~ .data$Jurisdiction)) |>
     dplyr::mutate(Jurisdiction = stringr::str_trim(.data$Jurisdiction, side = c("both")))
   
   # 2010 to 2020
   utils::download.file(ofm.url.2010, "working.xlsx", quiet = TRUE, mode = "wb")
   ofm.pop.file <- paste0(getwd(),"/working.xlsx")
   
-  ofm.pop.10 <- dplyr::as_tibble(openxlsx::read.xlsx(ofm.pop.file, detectDates = FALSE, skipEmptyRows = TRUE, startRow = 1, colNames = TRUE, sheet = "Total Population")) %>%
-    dplyr::filter(.data$County.Name %in% c("King","Kitsap","Pierce","Snohomish")) %>%
-    tidyr::pivot_longer(cols=dplyr::contains("Population"), names_to="Year", values_to="Estimate") %>%
-    dplyr::select(-(dplyr::contains("FIPS.Code")), -.data$Jurisdiction) %>%
-    dplyr::mutate(Year = stringr::str_replace(.data$Year, ".Total.Population.*", ""), Year = stringr::str_replace(.data$Year, ".Intercensal.*", ""), City.Name = stringr::str_replace(.data$City.Name, " \\(part\\)", "")) %>%
-    dplyr::mutate(dplyr::across(c('Filter','Year','Estimate'), as.numeric)) %>%
-    dplyr::rename(County=.data$County.Name, Jurisdiction=.data$City.Name) %>%
-    dplyr::select(-.data$Line) %>%
-    dplyr::filter(.data$Year != 2020) %>%
+  ofm.pop.10 <- dplyr::as_tibble(openxlsx::read.xlsx(ofm.pop.file, detectDates = FALSE, skipEmptyRows = TRUE, startRow = 1, colNames = TRUE, sheet = "Total Population")) |>
+    dplyr::filter(.data$County.Name %in% c("King","Kitsap","Pierce","Snohomish")) |>
+    tidyr::pivot_longer(cols=dplyr::contains("Population"), names_to="Year", values_to="Estimate") |>
+    dplyr::select(-(dplyr::contains("FIPS.Code")), -"Jurisdiction") |>
+    dplyr::mutate(Year = stringr::str_replace(.data$Year, ".Total.Population.*", ""), Year = stringr::str_replace(.data$Year, ".Intercensal.*", ""), City.Name = stringr::str_replace(.data$City.Name, " \\(part\\)", "")) |>
+    dplyr::mutate(dplyr::across(c('Filter','Year','Estimate'), as.numeric)) |>
+    dplyr::rename(County="County.Name", Jurisdiction="City.Name") |>
+    dplyr::select(-"Line") |>
+    dplyr::filter(.data$Year != 2020)|>
     dplyr::mutate(Jurisdiction = dplyr::case_when(
       Filter == 1 ~ .data$Jurisdiction,
       Filter == 2 ~ paste0(.data$Jurisdiction," ", .data$County, " County"),
       Filter == 3 ~ paste0(.data$Jurisdiction," ", .data$County, " County"),
-      Filter == 4 ~ .data$Jurisdiction)) %>%
+      Filter == 4 ~ .data$Jurisdiction)) |>
     dplyr::mutate(Jurisdiction = stringr::str_trim(.data$Jurisdiction, side = c("both")))
   
   # 2020 to present
   utils::download.file(ofm.url.latest, "working.xlsx", quiet = TRUE, mode = "wb")
   ofm.pop.file <- paste0(getwd(),"/working.xlsx")
   
-  ofm.pop.latest <- dplyr::as_tibble(openxlsx::read.xlsx(ofm.pop.file, detectDates = FALSE, skipEmptyRows = TRUE, startRow = 5, colNames = TRUE, sheet = "Population")) %>%
-    dplyr::filter(.data$County %in% c("King","Kitsap","Pierce","Snohomish")) %>%
-    tidyr::pivot_longer(cols=dplyr::contains("Population"), names_to="Year", values_to="Estimate") %>%
-    dplyr::mutate(Year = stringr::str_replace(.data$Year, ".Population.*", ""), Jurisdiction = stringr::str_replace(.data$Jurisdiction, " \\(part\\)", "")) %>%
-    dplyr::mutate(dplyr::across(c('Filter','Year','Estimate'), as.numeric)) %>%
-    dplyr::select(-.data$Line) %>%
+  ofm.pop.latest <- dplyr::as_tibble(openxlsx::read.xlsx(ofm.pop.file, detectDates = FALSE, skipEmptyRows = TRUE, startRow = 5, colNames = TRUE, sheet = "Population")) |>
+    dplyr::filter(.data$County %in% c("King","Kitsap","Pierce","Snohomish")) |>
+    tidyr::pivot_longer(cols=dplyr::contains("Population"), names_to="Year", values_to="Estimate") |>
+    dplyr::mutate(Year = stringr::str_replace(.data$Year, ".Population.*", ""), Jurisdiction = stringr::str_replace(.data$Jurisdiction, " \\(part\\)", "")) |>
+    dplyr::mutate(dplyr::across(c('Filter','Year','Estimate'), as.numeric)) |>
+    dplyr::select(-"Line") |>
     dplyr::mutate(Jurisdiction = stringr::str_trim(.data$Jurisdiction, side = c("both")))
   
   # Combine into one tibble and aggregate places that span multiple counties into one
-  ofm.pop <- dplyr::bind_rows(list(ofm.pop.90,ofm.pop.00,ofm.pop.10,ofm.pop.latest)) %>%
-    dplyr::select(-.data$County) %>%
-    dplyr::group_by(.data$Filter, .data$Jurisdiction, .data$Year) %>%
-    dplyr::summarize(Estimate = sum(.data$Estimate)) %>%
+  ofm.pop <- dplyr::bind_rows(list(ofm.pop.90,ofm.pop.00,ofm.pop.10,ofm.pop.latest)) |>
+    dplyr::select(-"County") |>
+    dplyr::group_by(.data$Filter, .data$Jurisdiction, .data$Year) |>
+    dplyr::summarize(Estimate = sum(.data$Estimate)) |>
     dplyr::as_tibble()
   
   # Create a Regional Summary by Filter Type and then Join to Full OFM tibble
-  region.pop <- ofm.pop %>%
-    dplyr::filter(.data$Filter <= 3) %>%
-    dplyr::select(.data$Filter,.data$Year, .data$Estimate) %>%
-    dplyr::group_by(.data$Filter,.data$Year) %>%
-    dplyr::summarize_all(sum) %>%
-    dplyr::mutate(Jurisdiction = "Region") %>%
-    dplyr::mutate(Jurisdiction = ifelse(.data$Filter == 2, "Unincorporated Region", .data$Jurisdiction)) %>%
+  region.pop <- ofm.pop |>
+    dplyr::filter(.data$Filter <= 3) |>
+    dplyr::select("Filter", "Year", "Estimate") |>
+    dplyr::group_by(.data$Filter,.data$Year) |>
+    dplyr::summarize_all(sum) |>
+    dplyr::mutate(Jurisdiction = "Region") |>
+    dplyr::mutate(Jurisdiction = ifelse(.data$Filter == 2, "Unincorporated Region", .data$Jurisdiction)) |>
     dplyr::mutate(Jurisdiction = ifelse(.data$Filter == 3, "Incorporated Region", .data$Jurisdiction))
   
   # Add the regional results to the OFM full tibble
-  ofm.pop <- dplyr::bind_rows(ofm.pop,region.pop) %>% dplyr::mutate(Variable="Total Population")
+  ofm.pop <- dplyr::bind_rows(ofm.pop,region.pop) |> dplyr::mutate(Variable="Total Population")
   
   # Add Regional Geography to Data
-  ofm.pop <- dplyr::left_join(ofm.pop, jurisdictions, by=c("Jurisdiction"="juris_name")) %>%
+  ofm.pop <- dplyr::left_join(ofm.pop, jurisdictions, by=c("Jurisdiction"="juris_name")) |>
     dplyr::mutate(regional_geography = dplyr::case_when(
       Filter==1 ~ "County",
       Filter==2 ~ "Unincorporated",
@@ -145,86 +145,137 @@ get_ofm_intercensal_population <-function () {
   
   file.remove(ofm.pop.file)
   
-  return(ofm.pop)
+  # Format consistent with other data
+  processed <- ofm.pop |>
+    dplyr::rename(geography="Jurisdiction", year="Year", estimate="Estimate", metric="Variable", variable="regional_geography") |>
+    dplyr::mutate(grouping = "Annual", 
+                  date=lubridate::ymd(paste0(.data$year, "-4-01")), 
+                  metric = stringr::str_remove_all(.data$metric, "Total "),
+                  geography_type = dplyr::case_when(
+                    .data$Filter == 1 & stringr::str_detect(.data$geography, "Region") ~ "Region",
+                    .data$Filter == 1 & stringr::str_detect(.data$geography, "County") ~ "County",
+                    .data$Filter == 2 & stringr::str_detect(.data$geography, "Region") ~ "Region",
+                    .data$Filter == 2 & stringr::str_detect(.data$geography, "County") ~ "County",
+                    .data$Filter == 3 & stringr::str_detect(.data$geography, "Region") ~ "Region",
+                    .data$Filter == 3 & stringr::str_detect(.data$geography, "County") ~ "County",
+                    .data$Filter == 4 ~ "City"),
+                  geography = stringr::str_remove_all(.data$geography, "Incorporated "),
+                  geography = stringr::str_remove_all(.data$geography, "Unincorporated "),
+                  geography = stringr::str_remove_all(.data$geography, " County"),
+                  variable = stringr::str_replace_all(.data$variable, "County", "Total"),
+                  year = as.character(.data$year)) |>
+    dplyr::select(-"Filter") |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", "estimate")
+  
+  # Calculate Annual Change
+  min_yr <- min(unique(processed$year))
+  annual <- processed |>
+    dplyr::mutate(delta = (.data$estimate - dplyr::lag(.data$estimate))) |>
+    dplyr::filter(.data$year > min_yr) |>
+    dplyr::mutate(grouping = "Change") |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", estimate="delta")
+
+  processed <- dplyr::bind_rows(processed, annual)
+  
+  # Get Forecast Population Growth from Elmer
+  forecast <-  psrcelmer::get_table(schema='Macroeconomic', tbl_name='pop_facts') |>
+    dplyr::filter(.data$pop_group_dim_id==7 & .data$data_year > 2010) |>
+    dplyr::rename(estimate="population") |>
+    dplyr::mutate(date = lubridate::ymd(paste0(.data$data_year,"-04-01"))) |>
+    dplyr::mutate(variable="Forecast") |>
+    dplyr::select("date", "estimate", "variable") |>
+    dplyr::mutate(geography="Region", geography_type="Region", metric="Population") |>
+    dplyr::group_by(.data$geography) |>
+    dplyr::mutate(change = (.data$estimate - dplyr::lag(.data$estimate))) |> 
+    tidyr::drop_na() |>
+    tidyr::pivot_longer(cols = c("estimate", "change"), names_to = "grouping", values_to = "estimate") |>
+    dplyr::mutate(grouping = stringr::str_replace_all(.data$grouping, "change", "Change")) |>
+    dplyr::mutate(grouping = stringr::str_replace_all(.data$grouping, "estimate", "Annual")) |>
+    dplyr::mutate(year = as.character(lubridate::year(.data$date))) |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", "estimate")
+  
+  processed <- dplyr::bind_rows(processed, forecast)
+  
+  return(processed)
   
 }
 
-
-#' Get OFM Postcensal Housing Data by Jurisdiction
+#' Get OFM Housing Data by Jurisdiction
 #'
-#' This function pulls Postcensal Housing Data by Jurisdiction.
+#' This function pulls Housing Data by Jurisdiction.
 #' 
-#' @return tibble of housing units by jurisdiction
+#' @return tibble of population by jurisdiction
 #' 
-#' @importFrom magrittr %<>% %>%
 #' @importFrom rlang .data
 #' 
 #' @examples
-#' 
-#' ofm.data <- get_ofm_postcensal_housing()
+#' \dontrun{
+#' housing_data <- get_housing_data()}
 #' 
 #' @export
 #'
-get_ofm_postcensal_housing <-function () {
+get_housing_data <-function () {
+  
+  # Silence the dplyr summarize message
+  options(dplyr.summarise.inform = FALSE)
   
   # Jurisdictions with Regional Geography
-  jurisdictions <- psrctrends::get_elmer_table("Political.jurisdiction_dims")
+  jurisdictions <- psrcelmer::get_table(schema='Political', tbl_name='jurisdiction_dims')
   
-  jurisdictions <- jurisdictions %>%
-    dplyr::mutate(juris_name = gsub("Seatac","SeaTac",.data$juris_name)) %>%
-    dplyr::mutate(juris_name = gsub("Beau Arts Village","Beaux Arts Village",.data$juris_name)) %>%
-    dplyr::select(.data$juris_name, .data$regional_geography, .data$airport_affected) %>%
-    dplyr::distinct() %>%
-    dplyr::mutate(regional_geography=gsub("HCT","High Capacity Transit Community",.data$regional_geography)) %>%
-    dplyr::mutate(regional_geography=gsub("Metro","Metropolitan Cities",.data$regional_geography)) %>%
-    dplyr::mutate(regional_geography=gsub("Core","Core Cities",.data$regional_geography)) %>%
-    dplyr::mutate(regional_geography=gsub("CitiesTowns","Cities & Towns",.data$regional_geography)) %>%
-    dplyr::select(-.data$airport_affected)%>%
-    dplyr::mutate(juris_name = gsub("Uninc. King", "King County", .data$juris_name)) %>%
-    dplyr::mutate(juris_name = gsub("Uninc. Kitsap", "Kitsap County", .data$juris_name)) %>%
-    dplyr::mutate(juris_name = gsub("Uninc. Pierce", "Pierce County", .data$juris_name)) %>%
+  jurisdictions <- jurisdictions |>
+    dplyr::mutate(juris_name = gsub("Seatac","SeaTac",.data$juris_name)) |>
+    dplyr::mutate(juris_name = gsub("Beau Arts Village","Beaux Arts Village",.data$juris_name)) |>
+    dplyr::select("juris_name", "regional_geography", "airport_affected") |>
+    dplyr::distinct() |>
+    dplyr::mutate(regional_geography=gsub("HCT","High Capacity Transit Community",.data$regional_geography)) |>
+    dplyr::mutate(regional_geography=gsub("Metro","Metropolitan Cities",.data$regional_geography)) |>
+    dplyr::mutate(regional_geography=gsub("Core","Core Cities",.data$regional_geography)) |>
+    dplyr::mutate(regional_geography=gsub("CitiesTowns","Cities & Towns",.data$regional_geography)) |>
+    dplyr::select(-"airport_affected") |>
+    dplyr::mutate(juris_name = gsub("Uninc. King", "King County", .data$juris_name)) |>
+    dplyr::mutate(juris_name = gsub("Uninc. Kitsap", "Kitsap County", .data$juris_name)) |>
+    dplyr::mutate(juris_name = gsub("Uninc. Pierce", "Pierce County", .data$juris_name)) |>
     dplyr::mutate(juris_name = gsub("Uninc. Snohomish", "Snohomish County", .data$juris_name))
   
   # Housing
-  
   ofm.url <- "https://ofm.wa.gov/sites/default/files/public/dataresearch/pop/april1/hseries/ofm_april1_postcensal_estimates_housing_1980_1990-present.xlsx"
   
   # 1990 to Present
   utils::download.file(ofm.url, "working.xlsx", quiet = TRUE, mode = "wb")
   ofm.pop.file <- paste0(getwd(),"/working.xlsx")
   
-  ofm.type <- dplyr::as_tibble(openxlsx::read.xlsx(ofm.pop.file, detectDates = FALSE, skipEmptyRows = TRUE, startRow = 4, colNames = TRUE, sheet = "Housing Units")) %>%
-    dplyr::filter(.data$County %in% c("King","Kitsap","Pierce","Snohomish")) %>%
-    dplyr::select(-(dplyr::contains("1980"))) %>%
-    tidyr::pivot_longer(cols=dplyr::contains("Housing"), names_to="Year", values_to="Estimate") %>%
+  ofm.type <- dplyr::as_tibble(openxlsx::read.xlsx(ofm.pop.file, detectDates = FALSE, skipEmptyRows = TRUE, startRow = 4, colNames = TRUE, sheet = "Housing Units")) |>
+    dplyr::filter(.data$County %in% c("King","Kitsap","Pierce","Snohomish")) |>
+    dplyr::select(-(dplyr::contains("1980"))) |>
+    tidyr::pivot_longer(cols=dplyr::contains("Housing"), names_to="Year", values_to="Estimate") |>
     dplyr::mutate(Variable= dplyr::case_when(
       stringr::str_detect(.data$Year, "Total") ~ "Total Housing Units",
       stringr::str_detect(.data$Year, "One") ~ "Single-Family",
       stringr::str_detect(.data$Year, "Two") ~ "Multi-Family",
-      stringr::str_detect(.data$Year, "Mobile") ~ "Mobile Home")) %>%
-    dplyr::mutate(Year = stringr::str_replace(.data$Year, ".Census.*", ""), Year = stringr::str_replace(.data$Year, ".Postcensal.*", ""), Jurisdiction = stringr::str_replace(.data$Jurisdiction, " \\(part\\)", "")) %>%
-    dplyr::mutate(dplyr::across(c('Filter','Year','Estimate'), as.numeric)) %>%
-    dplyr::select(-.data$Line) %>%
-    dplyr::mutate(Jurisdiction = stringr::str_trim(.data$Jurisdiction, side = c("both"))) %>%
-    dplyr::select(-.data$County) %>%
-    dplyr::group_by(.data$Filter, .data$Jurisdiction, .data$Year, .data$Variable) %>%
-    dplyr::summarize(Estimate = sum(.data$Estimate)) %>%
+      stringr::str_detect(.data$Year, "Mobile") ~ "Mobile Home")) |>
+    dplyr::mutate(Year = stringr::str_replace(.data$Year, ".Census.*", ""), Year = stringr::str_replace(.data$Year, ".Postcensal.*", ""), Jurisdiction = stringr::str_replace(.data$Jurisdiction, " \\(part\\)", "")) |>
+    dplyr::mutate(dplyr::across(c('Filter','Year','Estimate'), as.numeric)) |>
+    dplyr::select(-"Line") |>
+    dplyr::mutate(Jurisdiction = stringr::str_trim(.data$Jurisdiction, side = c("both"))) |>
+    dplyr::select(-"County") |>
+    dplyr::group_by(.data$Filter, .data$Jurisdiction, .data$Year, .data$Variable) |>
+    dplyr::summarize(Estimate = sum(.data$Estimate)) |>
     dplyr::as_tibble()
   
   # Create a Regional Summary by Filter Type and then Join to Full OFM tibble
-  region <- ofm.type %>%
-    dplyr::filter(.data$Filter <= 3) %>%
-    dplyr::select(.data$Filter,.data$Year, .data$Estimate, .data$Variable) %>%
-    dplyr::group_by(.data$Filter,.data$Year, .data$Variable) %>%
-    dplyr::summarize_all(sum) %>%
-    dplyr::mutate(Jurisdiction = "Region") %>%
-    dplyr::mutate(Jurisdiction = ifelse(.data$Filter == 2, "Unincorporated Region", .data$Jurisdiction)) %>%
+  region <- ofm.type |>
+    dplyr::filter(.data$Filter <= 3) |>
+    dplyr::select("Filter" , "Year", "Estimate", "Variable") |>
+    dplyr::group_by(.data$Filter,.data$Year, .data$Variable) |>
+    dplyr::summarize_all(sum) |>
+    dplyr::mutate(Jurisdiction = "Region") |>
+    dplyr::mutate(Jurisdiction = ifelse(.data$Filter == 2, "Unincorporated Region", .data$Jurisdiction)) |>
     dplyr::mutate(Jurisdiction = ifelse(.data$Filter == 3, "Incorporated Region", .data$Jurisdiction))
   
   # Add the regional results to the OFM full tibble
   ofm.type <- dplyr::bind_rows(ofm.type,region)
   
-  ofm.type <- dplyr::left_join(ofm.type, jurisdictions, by=c("Jurisdiction"="juris_name")) %>%
+  ofm.type <- dplyr::left_join(ofm.type, jurisdictions, by=c("Jurisdiction"="juris_name")) |>
     dplyr::mutate(regional_geography = dplyr::case_when(
       Filter==1 ~ "County",
       Filter==2 ~ "Unincorporated",
@@ -234,101 +285,123 @@ get_ofm_postcensal_housing <-function () {
   
   file.remove(ofm.pop.file)
   
-  return(ofm.type)
-}
+  # Format consistent with other data
+  processed <- ofm.type |>
+    dplyr::rename(geography="Jurisdiction", year="Year", estimate="Estimate", metric="Variable", variable="regional_geography") |>
+    dplyr::mutate(grouping = "Annual", 
+                  date=lubridate::ymd(paste0(.data$year, "-4-01")), 
+                  metric = stringr::str_remove_all(.data$metric, "Total "),
+                  geography_type = dplyr::case_when(
+                    .data$Filter == 1 & stringr::str_detect(.data$geography, "Region") ~ "Region",
+                    .data$Filter == 1 & stringr::str_detect(.data$geography, "County") ~ "County",
+                    .data$Filter == 2 & stringr::str_detect(.data$geography, "Region") ~ "Region",
+                    .data$Filter == 2 & stringr::str_detect(.data$geography, "County") ~ "County",
+                    .data$Filter == 3 & stringr::str_detect(.data$geography, "Region") ~ "Region",
+                    .data$Filter == 3 & stringr::str_detect(.data$geography, "County") ~ "County",
+                    .data$Filter == 4 ~ "City"),
+                  geography = stringr::str_remove_all(.data$geography, "Incorporated "),
+                  geography = stringr::str_remove_all(.data$geography, "Unincorporated "),
+                  geography = stringr::str_remove_all(.data$geography, " County"),
+                  variable = stringr::str_replace_all(.data$variable, "County", "Total"),
+                  year = as.character(.data$year)) |>
+    dplyr::select(-"Filter") |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", "estimate")
+  
+  # Calculate Annual Change
+  min_yr <- min(unique(processed$year))
+  annual <- processed |>
+    dplyr::group_by(.data$metric) |>
+    dplyr::mutate(delta = (.data$estimate - dplyr::lag(.data$estimate))) |>
+    dplyr::filter(.data$year > min_yr) |>
+    dplyr::mutate(grouping = "Change") |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", estimate="delta")
+  
+  processed <- dplyr::bind_rows(processed, annual)
+  
+  # Getting Forecast Housing Units
+  forecast <- readr::read_csv("X://DSA//rtp-dashboard//PSRC//regional-housing.csv", show_col_types = FALSE) |>
+    dplyr::select(-"Observed") |>
+    dplyr::rename(estimate="Forecast") |>
+    dplyr::mutate(date = lubridate::ymd(paste0(.data$Year,"-04-01"))) |>
+    dplyr::mutate(year = as.character(.data$Year)) |>
+    dplyr::mutate(metric="Housing Units", geography_type="Region", geography="Region", variable="Forecast") |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "metric", "estimate") |>
+    tidyr::drop_na()|>
+    dplyr::group_by(.data$variable) |>
+    dplyr::mutate(change = (.data$estimate - dplyr::lag(.data$estimate))) |>
+    tidyr::pivot_longer(cols = c("estimate", "change"), names_to = "grouping", values_to = "estimate") |>
+    tidyr::drop_na()|>
+    dplyr::mutate(grouping = stringr::str_replace_all(.data$grouping, "change", "Change")) |>
+    dplyr::mutate(grouping = stringr::str_replace_all(.data$grouping, "estimate", "Annual")) |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", "estimate")
+  
+  processed <- dplyr::bind_rows(processed, forecast)
+  
+  return(processed)}
 
-
-#' Get OFM Postcensal Population Change by Type by County
+#' Population and Housing Unit Growth Near High Capacity Transit
 #'
-#' This function pulls Postcensal Population Change Data by County.
+#' This function pulls and cleans data from the SAEP Block data from OFM from Elmer that was parcelized.
 #' 
-#' @return tibble of population change by County
+#' @return tibble of population and housing growth near High Capacity Transit by calendar year
 #' 
-#' @importFrom magrittr %<>% %>%
 #' @importFrom rlang .data
 #' 
-#' @examples
+#' @examples 
+#' \dontrun{
+#' pop_hsg_hct <- pop_hsg_near_hct()}
 #' 
-#' ofm.pop.chg.data <- get_ofm_postcensal_pop_change()
-#' 
+#'  
 #' @export
 #'
-get_ofm_postcensal_pop_change <-function () {
+pop_hsg_near_hct <- function() {
   
-  # Jurisdictions with Regional Geography
-  jurisdictions <- psrctrends::get_elmer_table("Political.jurisdiction_dims")
+  # Silence the dplyr summarize message
+  options(dplyr.summarise.inform = FALSE)
   
-  jurisdictions <- jurisdictions %>%
-    dplyr::mutate(juris_name = gsub("Seatac","SeaTac",.data$juris_name)) %>%
-    dplyr::mutate(juris_name = gsub("Beau Arts Village","Beaux Arts Village",.data$juris_name)) %>%
-    dplyr::select(.data$juris_name, .data$regional_geography, .data$airport_affected) %>%
-    dplyr::distinct() %>%
-    dplyr::mutate(regional_geography=gsub("HCT","High Capacity Transit Community",.data$regional_geography)) %>%
-    dplyr::mutate(regional_geography=gsub("Metro","Metropolitan Cities",.data$regional_geography)) %>%
-    dplyr::mutate(regional_geography=gsub("Core","Core Cities",.data$regional_geography)) %>%
-    dplyr::mutate(regional_geography=gsub("CitiesTowns","Cities & Towns",.data$regional_geography)) %>%
-    dplyr::select(-.data$airport_affected)%>%
-    dplyr::mutate(juris_name = gsub("Uninc. King", "King County", .data$juris_name)) %>%
-    dplyr::mutate(juris_name = gsub("Uninc. Kitsap", "Kitsap County", .data$juris_name)) %>%
-    dplyr::mutate(juris_name = gsub("Uninc. Pierce", "Pierce County", .data$juris_name)) %>%
-    dplyr::mutate(juris_name = gsub("Uninc. Snohomish", "Snohomish County", .data$juris_name))
+  # Load Parcel Data from Elmer
+  print(stringr::str_glue("Getting Parcel data from Elmer - this can take 5 or more minutes so be patient"))
+  parcel_facts <- psrcelmer::get_table(schema='ofm', tbl_name='parcelized_saep_facts')
+  parcel_dims <- psrcelmer::get_table(schema = 'small_areas', tbl_name = 'parcel_dim')
   
-  # Components of Change
-  ofm.url <- "https://ofm.wa.gov/sites/default/files/public/dataresearch/pop/components/ofm_april1_components_of_change_1960_to_present.xlsx"
+  # Clean up parcel geometry and join parcel facts and dimensions
+  print(stringr::str_glue("Cleaning up parcels"))
+  parcel_geo <- parcel_dims |> dplyr::select("parcel_dim_id", "parcel_id", parcel_year="base_year", hct="hct_station_area_vision_2050")
   
-  # 1960 to Present
-  utils::download.file(ofm.url, "working.xlsx", quiet = TRUE, mode = "wb")
-  ofm.pop.file <- paste0(getwd(),"/working.xlsx")
+  # Summarize Population and Housing Units by HCT Area
+  parcels <- dplyr::left_join(parcel_facts, parcel_geo, by=c("parcel_dim_id")) |> 
+    dplyr::select(year="estimate_year", "total_pop", "housing_units", variable="hct", "ofm_vintage")
   
-  ofm.natural <- dplyr::as_tibble(openxlsx::read.xlsx(ofm.pop.file, detectDates = FALSE, skipEmptyRows = TRUE, startRow = 4, colNames = TRUE, sheet = "Natural Increase")) %>%
-    dplyr::filter(.data$County %in% c("King","Kitsap","Pierce","Snohomish")) %>%
-    dplyr::select(-.data$Spacer) %>%
-    tidyr::pivot_longer(cols=dplyr::contains("Natural"), names_to="Year", values_to="Estimate") %>%
-    dplyr::mutate(Year = stringr::str_replace(.data$Year, "Natural.Increase.", "")) %>%
-    dplyr::mutate(Year = stringr::str_extract(.data$Year,"\\d{4}[^\\d]*$")) %>%
-    dplyr::mutate(dplyr::across(c('Estimate','Year'), as.numeric)) %>%
-    dplyr::mutate(Year = tidyr::replace_na(.data$Year,2021)) %>%
-    dplyr::mutate(Jurisdiction = stringr::str_trim(.data$Jurisdiction, side = c("both"))) %>%
-    dplyr::mutate(Jurisdiction = dplyr::case_when(
-      stringr::str_detect(.data$Jurisdiction, "Pierce") ~ "Pierce County",
-      !stringr::str_detect(.data$Jurisdiction, "Pierce") ~ .data$Jurisdiction)) %>%
-    dplyr::select(-.data$County) %>%
-    dplyr::mutate(Variable="Natural Increase")
+  max_ofm_vintage <- max(parcels$ofm_vintage)
   
-  ofm.migration <- dplyr::as_tibble(openxlsx::read.xlsx(ofm.pop.file, detectDates = FALSE, skipEmptyRows = TRUE, startRow = 4, colNames = TRUE, sheet = "Residual Net Migration")) %>%
-    dplyr::filter(.data$County %in% c("King","Kitsap","Pierce","Snohomish")) %>%
-    dplyr::select(-.data$Spacer) %>%
-    tidyr::pivot_longer(cols=dplyr::contains("Residual"), names_to="Year", values_to="Estimate") %>%
-    dplyr::mutate(Year = stringr::str_replace(.data$Year, "Residual.Net.Migration.", "")) %>%
-    dplyr::mutate(Year = stringr::str_extract(.data$Year,"\\d{4}[^\\d]*$")) %>%
-    dplyr::mutate(dplyr::across(c('Estimate','Year'), as.numeric)) %>%
-    dplyr::mutate(Year = tidyr::replace_na(.data$Year,2021)) %>%
-    dplyr::mutate(Jurisdiction = stringr::str_trim(.data$Jurisdiction, side = c("both"))) %>%
-    dplyr::mutate(Jurisdiction = dplyr::case_when(
-      stringr::str_detect(.data$Jurisdiction, "Pierce") ~ "Pierce County",
-      !stringr::str_detect(.data$Jurisdiction, "Pierce") ~ .data$Jurisdiction)) %>%
-    dplyr::select(-.data$County) %>%
-    dplyr::mutate(Variable="Migration")
+  parcels <- parcels |> dplyr::filter(.data$year < 2020 | (.data$year >= 2020 & .data$ofm_vintage==max_ofm_vintage)) |>
+    dplyr::group_by(.data$year, .data$variable) |>
+    dplyr::summarise(population = as.integer(sum(.data$total_pop)), housing_units = as.integer(sum(.data$housing_units))) |>
+    dplyr::as_tibble() |>
+    dplyr::arrange(.data$variable, .data$year) |>
+    dplyr::group_by(.data$variable) |>
+    dplyr::mutate(population_growth = .data$population - dplyr::lag(.data$population), housing_growth = .data$housing_units - dplyr::lag(.data$housing_units)) |>
+    tidyr::pivot_longer(cols = !c("year", "variable"), names_to = "metric", values_to = "estimate") |>
+    tidyr::drop_na() |>
+    dplyr::mutate(grouping = dplyr::case_when(
+      stringr::str_detect(.data$metric, "growth") ~ "Change",
+      !(stringr::str_detect(.data$metric, "growth")) ~ "Annual")) |>
+    dplyr::mutate(metric = dplyr::case_when(
+      stringr::str_detect(.data$metric, "population") ~ "Population near HCT",
+      stringr::str_detect(.data$metric, "housing") ~ "Housing Units near HCT"))
   
-  ofm.pop.chg <- dplyr::bind_rows(ofm.natural, ofm.migration) %>% dplyr::mutate(Filter="1")
+  print(stringr::str_glue("Adding totals and calculating shares for HCT growth"))
+  totals <- parcels |>
+    dplyr::group_by(.data$year, .data$metric, .data$grouping) |>
+    dplyr::summarise(total = sum(.data$estimate)) |>
+    dplyr::as_tibble()
   
-  region <- ofm.pop.chg %>%
-    dplyr::select(-.data$Jurisdiction) %>%
-    dplyr::group_by(.data$Filter, .data$Year, .data$Variable) %>%
-    dplyr::summarize_all(sum) %>%
-    dplyr::mutate(Jurisdiction = "Region") 
+  parcels <- dplyr::left_join(parcels, totals, by=c("year", "metric", "grouping")) |>
+    dplyr::mutate(share = .data$estimate / .data$total) |>
+    dplyr::select(-"total") |>
+    dplyr::mutate(year = as.character(.data$year), geography="Region", geography_type="Region", date=lubridate::mdy(paste0("04-01-", .data$year))) |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", "estimate", "share")
   
-  # Add the regional results to the OFM full tibble
-  ofm.pop.chg <- dplyr::bind_rows(ofm.pop.chg,region)
+  return(parcels)
   
-  ofm.pop.chg <- dplyr::left_join(ofm.pop.chg, jurisdictions, by=c("Jurisdiction"="juris_name")) %>%
-    dplyr::mutate(regional_geography = dplyr::case_when(
-      Jurisdiction=="Region" ~ "Region",
-      Jurisdiction!="Region" ~ "County")) %>%
-    dplyr::mutate(Year = as.character(.data$Year))
-  
-  file.remove(ofm.pop.file)
-  
-  return(ofm.pop.chg)
 }
-

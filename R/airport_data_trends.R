@@ -47,8 +47,8 @@ download_sea_operations_data <- function(monthyear) {
 #' @importFrom rlang .data
 #' 
 #' @examples
-#' 
-#' airport_operations <- process_sea_operations_data(yr1=2022)
+#' \dontrun{
+#' airport_operations <- process_sea_operations_data(yr1=2022)}
 #' 
 #' @export
 #'
@@ -112,19 +112,20 @@ process_sea_operations_data <- function(yr1=2019) {
       dplyr::mutate(date=paste0(.data$year,"-",.data$month,"-01")) |>
       dplyr::mutate(date=lubridate::ymd(.data$date)) |>
       dplyr::mutate(geography="Seattle-Tacoma International Airport") |>
-      dplyr::mutate(concept="Airport Operations")
+      dplyr::mutate(grouping="Monthly") |>
+      dplyr::select(-"month")
     
     ifelse(is.null(processed), processed <- t, processed <- dplyr::bind_rows(processed,t))
     rm(t)
     file.remove("working.xls")
   }
   
-  # Final cleanup
+  # Final cleanup of Monthly Data
   processed <- processed |> 
     dplyr::filter(.data$variable %in% summary_categories) |>
     dplyr::mutate(variable = stringr::str_remove_all(.data$variable, "Subtotal - ")) |>
     dplyr::mutate(variable = stringr::str_to_title(.data$variable)) |>
-    dplyr::mutate(grouping = dplyr::case_when(
+    dplyr::mutate(metric = dplyr::case_when(
       stringr::str_detect(.data$variable, "Passenger") ~ "Passengers",
       stringr::str_detect(.data$variable, "Cargo") ~ "Cargo",
       stringr::str_detect(.data$variable, "Freight") ~ "Cargo")) |>
@@ -132,7 +133,25 @@ process_sea_operations_data <- function(yr1=2019) {
       stringr::str_detect(.data$variable, "Domestic ") ~ "Domestic",
       stringr::str_detect(.data$variable, "International ") ~ "International",
       stringr::str_detect(.data$variable, "Grand") ~ "Total")) |>
-    dplyr::mutate(concept = "SEA")
+    dplyr::mutate(geography_type = "Region")
+  
+  # Create Annual Summary
+  annual <- processed |>
+    dplyr::filter(.data$year %in% complete_years) |>
+    dplyr::group_by(.data$year, .data$variable, .data$metric) |>
+    dplyr::summarise(estimate = sum(.data$estimate)) |>
+    dplyr::as_tibble() |>
+    dplyr::mutate(grouping="Annual", geography="Seattle-Tacoma International Airport", geography_type="Region", date=lubridate::ymd(paste0(.data$year, "-12-01")))
+  
+  # Create Year to Date Summary
+  ytd <- processed |>
+    dplyr::filter(lubridate::month(.data$date) <= c_mo) |>
+    dplyr::group_by(.data$year, .data$variable, .data$metric) |>
+    dplyr::summarise(estimate = sum(.data$estimate)) |>
+    dplyr::as_tibble() |>
+    dplyr::mutate(grouping="YTD", geography="Seattle-Tacoma International Airport", geography_type="Region", date=lubridate::ymd(paste0(.data$year, "-", c_mo, "-01")))
+  
+  processed <- dplyr::bind_rows(processed, annual, ytd) |> dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", "estimate")
   
   return(processed)
 }
@@ -142,13 +161,14 @@ process_sea_operations_data <- function(yr1=2019) {
 #' This function processes passenger annual data for FAA.
 #' 
 #' @param yr1 First four digit calendar year as integer of data to process - defaults to 2019
+#' @param metric Either "passengers" or "cargo" - defaults to "passengers"
 #' @return tibble in long form of FAA Airport Passenger data
 #' 
 #' @importFrom rlang .data
 #' 
 #' @examples
-#' 
-#' national_airport_passengers <- process_faa_data()
+#' \dontrun{
+#' national_airport_passengers <- process_faa_data()}
 #' 
 #' @export
 #'
@@ -176,7 +196,7 @@ process_faa_data <- function(yr1=2019, metric="passengers") {
     t <- t |>
       stats::setNames(c("geography", "estimate")) |>
       tidyr::drop_na() |>
-      dplyr::mutate(year = y, month = "12", date = lubridate::ymd(paste0(y,"-12-01")), concept = "Metro Airports", variable = "Total", grouping = stringr::str_to_title(metric))
+      dplyr::mutate(year = y, date = lubridate::ymd(paste0(y,"-12-01")), geography_type = "Metro Airports", variable = "Total", metric = stringr::str_to_title(metric), grouping = "Annual")
     
     # Convert cargo from pounds to metric tons
     if (metric == "cargo") {
@@ -189,7 +209,7 @@ process_faa_data <- function(yr1=2019, metric="passengers") {
     
   }
   
-  processed <- processed |> dplyr::filter(year >= yr1)
+  processed <- processed |> dplyr::filter(.data$year >= yr1) |> dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", "estimate")
  
   return(processed) 
 }
@@ -205,8 +225,8 @@ process_faa_data <- function(yr1=2019, metric="passengers") {
 #' @importFrom rlang .data
 #' 
 #' @examples
-#' 
-#' airport_operations <- summarize_airport_data(yr1=2022)
+#' \dontrun{
+#' airport_data <- summarize_airport_data(yr1=2022)}
 #' 
 #' @export
 #'

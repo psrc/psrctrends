@@ -1,171 +1,329 @@
-#' Summarize Electric Vehicle Registrations by County by Month
+#' Total Vehicle Registrations by Electrification Level
 #'
 #' This function pulls and cleans data from the Washington State Registration Data.
-#' Data is originally pulled from https://data.wa.gov/ via the Socrata API
+#' Data is pulled from https://data.wa.gov/ via the Socrata API
 #' 
-#' @param st List of States by two digit code to keep - defaults to WA 
-#' @param ct List of County Names to keep - defaults to PSRC counties
-#' @return tibble of electric vehicle registrations by month and county
+#' @return tibble of total vehicle registrations by electrification level by month and county
 #' 
-#' @importFrom magrittr %<>% %>%
 #' @importFrom rlang .data
-#' @importFrom tidyselect all_of
 #' 
 #' @examples
-#' 
-#' ev_registration <- get_ev_registration_monthly()
+#' \dontrun{
+#' total_vehicle_registrations <- all_registrations()}
 #' 
 #' @export
 #'
-get_ev_registration_monthly <- function(st=c("WA"), ct=c("King","Kitsap","Pierce","Snohomish")) {
+all_registrations <- function () {
   
-  numeric_cols <- c("BEV","PHEV","EV","NEV","TOT")
+  # Silence the dplyr summarize message
+  options(dplyr.summarise.inform = FALSE)
   
-  d <- dplyr::as_tibble(RSocrata::read.socrata("https://data.wa.gov/resource/3d5d-sdqb.json", 
-                                               app_token = "plpj1IICGOhTVjmebF1kls9Cf")) %>%
-    dplyr::mutate(date = lubridate::ymd(.data$date)) %>%
-    dplyr::filter(.data$state %in% st & .data$county %in% ct) %>%
-    dplyr::select(-.data$percent_electric_vehicles) %>%
-    dplyr::rename(BEV=.data$battery_electric_vehicles_bevs_) %>%
-    dplyr::rename(PHEV=.data$plug_in_hybrid_electric_vehicles_phevs_) %>%
-    dplyr::rename(EV=.data$electric_vehicle_ev_total) %>%
-    dplyr::rename(NEV=.data$non_electric_vehicles) %>%
-    dplyr::rename(TOT=.data$total_vehicles) %>%
-    dplyr::rename(VEH_TYPE=.data$vehicle_primary_use) %>%
-    dplyr::mutate_at(all_of(numeric_cols), as.numeric) 
+  psrc_token <- "tjnJfQzL0SfZJ1cbT0iiCUpO3"
   
-  r <- d %>%
-    dplyr::group_by(.data$date, .data$VEH_TYPE) %>%
-    dplyr::summarise(dplyr::across(all_of(numeric_cols), sum)) %>%
-    dplyr::mutate(county="PSRC Region", state="WA")
+  print(stringr::str_glue("Loading Total vehicle registrations from WA State Open Portal via RScorata"))
+  df <- dplyr::as_tibble(RSocrata::read.socrata("https://data.wa.gov/resource/3d5d-sdqb.json", app_token = psrc_token)) |>
+    dplyr::filter(.data$state %in% c("WA") & .data$county %in% c("King", "Kitsap", "Pierce", "Snohomish")) |>
+    dplyr::select(-"state", -"vehicle_primary_use", -"percent_electric_vehicles") |>
+    dplyr::rename(bev="battery_electric_vehicles_bevs_") |>
+    dplyr::rename(phev="plug_in_hybrid_electric_vehicles_phevs_") |>
+    dplyr::rename(ev="electric_vehicle_ev_total") |>
+    dplyr::rename(non_ev = "non_electric_vehicles") |>
+    dplyr::rename(geography = "county") |>
+    dplyr::mutate(bev=as.numeric(.data$bev), phev=as.numeric(.data$phev)) |>
+    dplyr::mutate(ev=as.numeric(.data$ev), non_ev=as.numeric(.data$non_ev)) |>
+    dplyr::mutate(total_vehicles=as.numeric(.data$total_vehicles)) |>
+    dplyr::group_by(.data$date, .data$geography) |>
+    dplyr::summarise(bev=sum(.data$bev), phev=sum(.data$phev), ev=sum(.data$ev), non_ev=sum(.data$non_ev), total_vehicles=sum(.data$total_vehicles)) |>
+    dplyr::as_tibble() 
   
-  d <- dplyr::bind_rows(d,r)
+  print(stringr::str_glue("Creating a region summary from county data"))
+  region <- df |>
+    dplyr::group_by(.data$date) |>
+    dplyr::summarise(bev=sum(.data$bev), phev=sum(.data$phev), ev=sum(.data$ev), non_ev=sum(.data$non_ev), total_vehicles=sum(.data$total_vehicles)) |>
+    dplyr::as_tibble() |>
+    dplyr::mutate(geography = "Region")
   
-  t <- d %>%
-    dplyr::group_by(.data$date, .data$county, .data$state) %>%
-    dplyr::summarise(dplyr::across(all_of(numeric_cols), sum)) %>%
-    dplyr::mutate(VEH_TYPE="Electric Vehicle Registrations")
+  df <- dplyr::bind_rows(df, region)
   
-  d <- dplyr::bind_rows(d,t) %>%
-    dplyr::mutate(share=.data$EV/.data$TOT) %>%
-    dplyr::filter(.data$VEH_TYPE=="Electric Vehicle Registrations") %>%
-    dplyr::rename(variable=.data$VEH_TYPE, all_vehicles=.data$TOT) %>%
-    dplyr::mutate(yr=as.character(lubridate::year(.data$date))) %>%
-    dplyr::mutate(mo=lubridate::month(.data$date, label=TRUE, abbr=FALSE)) %>%
-    dplyr::select(-.data$BEV, -.data$PHEV, -.data$NEV)
+  print(stringr::str_glue("Calculating shares"))
+  share <- df |>
+    dplyr::mutate(bev_share = .data$bev / .data$total_vehicles) |>
+    dplyr::mutate(phev_share = .data$phev / .data$total_vehicles) |>
+    dplyr::mutate(ev_share = .data$ev / .data$total_vehicles) |>
+    dplyr::mutate(non_ev_share = .data$non_ev / .data$total_vehicles) |>
+    dplyr::mutate(total_vehicles_share = 1) |>
+    dplyr::select(-"bev", -"phev", -"ev", -"non_ev", -"total_vehicles") |>
+    tidyr::pivot_longer(!c("date", "geography"), names_to = "variable", values_to = "share") |>
+    dplyr::mutate(variable = stringr::str_remove_all(.data$variable, "_share"))
   
-  min.date <- d %>% dplyr::select(.data$date) %>% dplyr::pull() %>% min()
+  totals <- df |>
+    tidyr::pivot_longer(!c("date", "geography"), names_to = "variable", values_to = "estimate")
   
-  d <- d %>%
-    dplyr::arrange(.data$county, .data$variable, .data$date) %>%
-    dplyr::mutate(delta = .data$EV - dplyr::lag(.data$EV)) %>%
-    dplyr::mutate(delta = dplyr::case_when(
-      .data$date == min.date ~ 0,
-      .data$date != min.date ~ .data$delta))
+  print(stringr::str_glue("Final cleanup"))
+  final_data <- dplyr::left_join(totals, share, by=c("date", "geography", "variable")) |>
+    dplyr::mutate(geography_type = ifelse(.data$geography == "Region", "Region", "County"), 
+                  grouping = "All", 
+                  metric = "total-vehicle-registrations") |>
+    dplyr::mutate(year = as.character(lubridate::year(.data$date))) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "total_vehicles", "Total Vehicles")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "bev", "Battery Electric")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "phev", "Plug-In Hybrid")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "non_ev", "Internal Combustion")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "ev", "Total Electric Vehicles")) |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", "estimate", "share")
   
-  d <- dplyr::na_if(d,0)
-  
-  return(d)
+  print(stringr::str_glue("All done"))
+  return(final_data)
   
 }
 
-#' Summarize Electric Vehicle Registrations by County by Year to Date
+#' New Vehicle Registrations by Electrification Level
 #'
-#' This function pulls and cleans data from the Washington State Registration Data.
-#' Data is originally pulled from https://data.wa.gov/ via the Socrata API
+#' This cleans data from the Washington State Registration Data vehicle registrations on open data portal.
+#' The data is pre-downloaded due to size from: https://data.wa.gov/Transportation/Title-Transactions-by-Month/u4cd-bc3x
 #' 
-#' @param yrs Integer max year if not max from data - default is null
-#' @param mos Integer month if not max from data - default is null
-#' @param st List of States by two digit code to keep - defaults to WA 
-#' @param ct List of County Names to keep - defaults to PSRC counties
-#' @return tibble of vehicle registrations by year for selected month
+#' @param data_file path to downloaded data files https://data.wa.gov/Transportation/Title-Transactions-by-Month/u4cd-bc3x
+#' @param title_type Either an "Original Title" or a "Transfer Title" - defaults to "Original Title"
+#' @param vehicle_type Either for "New" or "Used" vehicles  -defaults to "New"
+#' @return tibble of new vehicle registrations by electrification level by month and county
 #' 
-#' @importFrom magrittr %<>% %>%
 #' @importFrom rlang .data
 #' 
 #' @examples
-#' 
-#' ev_registration_ytd_latest <- get_ev_registration_ytd()
-#' ev_registration_ytd_2021 <- get_ev_registration_ytd(yr=2021)
-#' ev_registration_ytd_april <- get_ev_registration_ytd(mo=4)
+#' \dontrun{
+#' new_vehicle_registrations <- new_registrations(title_type=c("Original Title"), 
+#'                                                vehicle_type=c("New"))}
 #' 
 #' @export
 #'
-get_ev_registration_ytd <- function(yrs=NULL, mos=NULL, st=c("WA"), ct=c("King","Kitsap","Pierce","Snohomish")) {
+new_registrations <- function (data_file="X:/DSA/rtp-dashboard/DOL/Vehicle_Title_Transactions.csv", title_type="Original Title", vehicle_type="New") {
   
-  numeric_cols <- c("BEV","PHEV","EV","NEV","TOT")
-  d <- psrctrends::get_ev_registration_monthly(st,ct)
+  # Silence the dplyr summarize message
+  options(dplyr.summarise.inform = FALSE)
   
-  if (is.null(yrs)) {
-    yrs <- d %>% 
-      dplyr::select(.data$date) %>% 
-      dplyr::pull() %>%
-      max() %>%
-      lubridate::year()
-  }
+  print(stringr::str_glue("Loading the Vehicle Title file from {data_file} - this is a large file so it can take a minute or two"))
+  df <- readr::read_csv(data_file, show_col_types = FALSE) |>
+    dplyr::filter(.data$`New or Used Vehicle` == vehicle_type & .data$`Transaction Type` == title_type) |>
+    dplyr::select(date="Transaction Month and Year", variable="Electrification Level", 
+                  geography="County", estimate="Transaction Count") |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "BEV \\(Battery Electric Vehicle\\)", "Battery Electric Vehicle")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "HEV \\(Hybrid Electric Vehicle\\) - Level Unknown", "Hybrid Electric Vehicle")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "ICE \\(Internal Combustion Engine\\)", "Internal Combustion Engine")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "Mild HEV \\(Hybrid Electric Vehicle\\)", "Hybrid Electric Vehicle")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "Strong HEV \\(Hybrid Electric Vehicle\\)", "Hybrid Electric Vehicle")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "PHEV \\(Plug-in Hybrid Electric Vehicle\\)", "Plug-in Hybrid Electric Vehicle")) |>
+    dplyr::group_by(.data$date, .data$variable, .data$geography) |>
+    dplyr::summarise(estimate = sum(.data$estimate)) |>
+    dplyr::as_tibble() |>
+    dplyr::mutate(date = lubridate::mdy(date))
   
-  if (is.null(mos)) {
-    mos <- d %>% 
-      dplyr::select(.data$date) %>% 
-      dplyr::pull() %>%
-      max() %>%
-      lubridate::month()
-  }
+  print(stringr::str_glue("Creating a region summary from county data"))
+  region <- df |>
+    dplyr::group_by(.data$date, .data$variable) |>
+    dplyr::summarise(estimate = sum(.data$estimate)) |>
+    dplyr::as_tibble() |>
+    dplyr::mutate(geography = "Region")
   
-  d <- d %>%
-    dplyr::filter(lubridate::month(.data$date)==mos & lubridate::year(.data$date)<=yrs)
+  df <- dplyr::bind_rows(df, region)
   
-  min.date <- d %>% dplyr::select(.data$date) %>% dplyr::pull() %>% min()
+  print(stringr::str_glue("Calculating shares and final cleanup"))
+  total <- df |>
+    dplyr::group_by(.data$date, .data$geography) |>
+    dplyr::summarise(total = sum(.data$estimate)) |>
+    dplyr::as_tibble()
   
-  d <- d %>%
-    dplyr::arrange(.data$county, .data$variable, .data$date) %>%
-    dplyr::mutate(delta = .data$EV - dplyr::lag(.data$EV)) %>%
-    dplyr::mutate(delta = dplyr::case_when(
-      .data$date == min.date ~ 0,
-      .data$date != min.date ~ .data$delta))
+  df <- dplyr::left_join(df, total, by=c("date", "geography")) |>
+    dplyr::mutate(share = .data$estimate/.data$total) |>
+    dplyr::select(-"total") |>
+    dplyr::mutate(year = as.character(lubridate::year(.data$date))) |>
+    dplyr::mutate(geography_type = ifelse(.data$geography == "Region", "Region", "County"),
+                  grouping = vehicle_type, metric = "vehicle-registrations") |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", "estimate", "share")
   
-  d <- dplyr::na_if(d,0)
-  
-  return(d)
+  print(stringr::str_glue("All done"))
+  return(df)
   
 }
 
-#' Summarize Electric Vehicle Registrations for Calendar Year
+#' Electric Vehicle Makers by Vehicle Registration
 #'
-#' This function pulls and cleans data from the Washington State Registration Data.
-#' Data is originally pulled from https://data.wa.gov/ via the Socrata API
+#' This cleans data from the Washington State Registration Data vehicle registrations on open data portal.
+#' The data is pre-downloaded due to size from: https://data.wa.gov/Transportation/Title-Transactions-by-Month/u4cd-bc3x
 #' 
-#' @param st List of States by two digit code to keep - defaults to WA 
-#' @param ct List of County Names to keep - defaults to PSRC counties
-#' @return tibble of vehicle registrations by year for selected month
+#' @param data_file path to downloaded data files https://data.wa.gov/Transportation/Title-Transactions-by-Month/u4cd-bc3x
+#' @param engine_type type of vehicle to summarize make for - defaults to Battery Electric Vehicle
+#' @return tibble of electric vehicle manufacturers registered in the region by year to date
 #' 
-#' @importFrom magrittr %<>% %>%
 #' @importFrom rlang .data
 #' 
 #' @examples
-#' 
-#' ev_registration_yearend <- get_ev_registration_annual()
+#' \dontrun{
+#' ev_manufacturers <- vehicle_manufacturers(engine_type="Battery Electric Vehicle")}
 #' 
 #' @export
 #'
-get_ev_registration_annual <- function(st=c("WA"), ct=c("King","Kitsap","Pierce","Snohomish")) {
+vehicle_manufacturers <- function (data_file="X:/DSA/rtp-dashboard/DOL/Vehicle_Title_Transactions.csv", engine_type="Battery Electric Vehicle") {
   
-  numeric_cols <- c("BEV","PHEV","EV","NEV","TOT")
-  d <- psrctrends::get_ev_registration_monthly(st,ct)
+  # Silence the dplyr summarize message
+  options(dplyr.summarise.inform = FALSE)
   
-  d <- d %>% dplyr::filter(lubridate::month(.data$date)==12)
+  print(stringr::str_glue("Loading the Vehicle Title file from {data_file} - this is a large file so it can take a minute or two"))
+  df <- readr::read_csv(data_file, show_col_types = FALSE) 
   
-  min.date <- d %>% dplyr::select(.data$date) %>% dplyr::pull() %>% min()
+  print(stringr::str_glue("Determining the latest month of data by year"))
+  mo <- df |>
+    dplyr::select(date="Transaction Month and Year") |>
+    dplyr::mutate(date = lubridate::mdy(.data$date)) |>
+    dplyr::mutate(year = lubridate::year(.data$date)) |>
+    dplyr::mutate(month = lubridate::month(.data$date)) |>
+    dplyr::group_by(.data$year) |>
+    dplyr::summarise(max_month = max(.data$month)) |>
+    dplyr::as_tibble()
   
-  d <- d %>%
-    dplyr::arrange(.data$county, .data$variable, .data$date) %>%
-    dplyr::mutate(delta = .data$EV - dplyr::lag(.data$EV)) %>%
-    dplyr::mutate(delta = dplyr::case_when(
-      .data$date == min.date ~ 0,
-      .data$date != min.date ~ .data$delta))
+  print(stringr::str_glue("Summarizing Manufacturer data for {engine_type} by Region and Year"))
+  working <- df |>
+    dplyr::select(date="Transaction Month and Year", variable="Electrification Level", grouping="Make", estimate="Transaction Count") |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "BEV \\(Battery Electric Vehicle\\)", "Battery Electric Vehicle")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "HEV \\(Hybrid Electric Vehicle\\) - Level Unknown", "Hybrid Electric Vehicle")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "ICE \\(Internal Combustion Engine\\)", "Internal Combustion Engine")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "Mild HEV \\(Hybrid Electric Vehicle\\)", "Hybrid Electric Vehicle")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "Strong HEV \\(Hybrid Electric Vehicle\\)", "Hybrid Electric Vehicle")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "PHEV \\(Plug-in Hybrid Electric Vehicle\\)", "Plug-in Hybrid Electric Vehicle")) |>
+    dplyr::filter(.data$variable == engine_type) |>
+    dplyr::mutate(date = lubridate::mdy(.data$date)) |>
+    dplyr::mutate(year = lubridate::year(.data$date)) |>
+    dplyr::group_by(.data$year, .data$variable, .data$grouping) |>
+    dplyr::summarise(estimate = sum(.data$estimate)) |>
+    dplyr::as_tibble()
   
-  d <- dplyr::na_if(d,0)
+  print(stringr::str_glue("Calculating shares and final cleanup for {engine_type} manufacturers"))
+  working <- dplyr::left_join(working, mo, by=c("year")) |>
+    dplyr::mutate(date = lubridate::mdy(paste0(.data$max_month,"-01-", .data$year))) |>
+    dplyr::select(-"year", -"max_month")
   
-  return(d)
+  total <- working |>
+    dplyr::group_by(.data$date, .data$variable) |>
+    dplyr::summarise(total = sum(.data$estimate)) |>
+    dplyr::as_tibble()
+  
+  working <- dplyr::left_join(working, total, by=c("date", "variable")) |>
+    dplyr::mutate(share = .data$estimate/.data$total) |>
+    dplyr::select(-"total") |>
+    dplyr::mutate(year = as.character(lubridate::year(.data$date))) |>
+    dplyr::mutate(geography = "Region", geography_type = "Region", metric = "vehicle-manufacturers") |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", "estimate", "share")
+  
+  print(stringr::str_glue("All done"))  
+  return(working)
+  
+}
+
+#' New Vehicle Registrations by Electrification Level and Census Tract
+#'
+#' This cleans data from the Washington State Registration Data vehicle registrations on open data portal.
+#' The data is pre-downloaded due to size from: https://data.wa.gov/Transportation/Title-Transactions-by-Month/u4cd-bc3x
+#' 
+#' @param data_file path to downloaded data files https://data.wa.gov/Transportation/Title-Transactions-by-Month/u4cd-bc3x
+#' @param title_type Either an "Original Title" or a "Transfer Title" - defaults to "Original Title"
+#' @param vehicle_type Either for "New" or "Used" vehicles  -defaults to "New"
+#' @return tibble of new vehicle registrations by electrification level by year to date by 2020 census tract
+#' 
+#' @importFrom rlang .data
+#' 
+#' @examples
+#' \dontrun{
+#' new_veh_tract <- vehicle_registrations_tract(title_type=c("Original Title"), 
+#'                                              vehicle_type=c("New"))}
+#' 
+#' @export
+#'
+vehicle_registrations_tract <- function (data_file="X:/DSA/rtp-dashboard/DOL/Vehicle_Title_Transactions.csv", title_type="Original Title", vehicle_type="New") {
+  
+  # Silence the dplyr summarize message
+  options(dplyr.summarise.inform = FALSE)
+  
+  print(stringr::str_glue("Loading the Vehicle Title file from {data_file} - this is a large file so it can take a minute or two"))
+  df <- readr::read_csv(data_file, show_col_types = FALSE) 
+  
+  print(stringr::str_glue("Determining the latest month of data by year"))
+  mo <- df |>
+    dplyr::select(date="Transaction Month and Year") |>
+    dplyr::mutate(date = lubridate::mdy(.data$date)) |>
+    dplyr::mutate(year = lubridate::year(.data$date)) |>
+    dplyr::mutate(month = lubridate::month(.data$date)) |>
+    dplyr::group_by(.data$year) |>
+    dplyr::summarise(max_month = max(.data$month)) |>
+    dplyr::as_tibble()
+  
+  print(stringr::str_glue("Summarizing {vehicle_type} vehicle registrations by Census Tract"))
+  working <- df |>
+    dplyr::filter(.data$`New or Used Vehicle` == vehicle_type & .data$`Transaction Type` == title_type) |>
+    dplyr::select(date="Transaction Month and Year", variable="Electrification Level", 
+                  geography="2020 GEOID", estimate="Transaction Count") |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "BEV \\(Battery Electric Vehicle\\)", "Battery Electric Vehicle")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "HEV \\(Hybrid Electric Vehicle\\) - Level Unknown", "Hybrid Electric Vehicle")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "ICE \\(Internal Combustion Engine\\)", "Internal Combustion Engine")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "Mild HEV \\(Hybrid Electric Vehicle\\)", "Hybrid Electric Vehicle")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "Strong HEV \\(Hybrid Electric Vehicle\\)", "Hybrid Electric Vehicle")) |>
+    dplyr::mutate(variable = stringr::str_replace_all(.data$variable, "PHEV \\(Plug-in Hybrid Electric Vehicle\\)", "Plug-in Hybrid Electric Vehicle")) |>
+    dplyr::mutate(date = lubridate::mdy(.data$date)) |>
+    dplyr::mutate(year = lubridate::year(.data$date)) |>
+    dplyr::group_by(.data$year, .data$variable, .data$geography) |>
+    dplyr::summarise(estimate = sum(.data$estimate)) |>
+    dplyr::as_tibble() |>
+    tidyr::drop_na()
+  
+  print(stringr::str_glue("Calculating shares and final cleanup for {vehicle_type} vehicle registrations by Census Tract"))
+  working <- dplyr::left_join(working, mo, by=c("year")) |>
+    dplyr::mutate(date = lubridate::mdy(paste0(.data$max_month,"-01-", .data$year))) |>
+    dplyr::select(-"year", -"max_month")
+  
+  total <- working |>
+    dplyr::group_by(.data$date, .data$geography) |>
+    dplyr::summarise(total = sum(.data$estimate)) |>
+    dplyr::as_tibble()
+  
+  working <- dplyr::left_join(working, total, by=c("date", "geography")) |>
+    dplyr::mutate(share = .data$estimate/.data$total) |>
+    dplyr::select(-"total") |>
+    dplyr::mutate(geography = as.character(.data$geography)) |>
+    dplyr::mutate(geography_type = "Tract", grouping = vehicle_type, metric = "vehicle-registrations") |>
+    dplyr::mutate(year = as.character(lubridate::year(.data$date))) |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", "estimate", "share")
+  
+  print(stringr::str_glue("All done")) 
+  return(working)
+  
+}
+
+#' Vehicle Registration data by various geographies
+#'
+#' This function summarizes vehicle registration data by electrification level 
+#' The data is pre-downloaded due to size from: https://data.wa.gov/Transportation/Title-Transactions-by-Month/u4cd-bc3x
+#'
+#' @param dol_registration_file path to downloaded registration data file
+#' @return tibble vehicle registrations by electrification level for county, region and census tracts
+#'
+#' @importFrom rlang .data
+#'
+#' @examples 
+#' \dontrun{
+#' vehicle_data <- process_vehicle_registration_data()}
+#' 
+#' @export
+#'
+process_vehicle_registration_data <- function(dol_registration_file="X:/DSA/rtp-dashboard/DOL/Vehicle_Title_Transactions.csv") {
+  
+  processed <- NULL
+  total_vehicle_registrations <- all_registrations()
+  new_vehicle_registrations <- new_registrations(data_file=dol_registration_file, vehicle_type="New")
+  used_vehicle_registrations <- new_registrations(data_file=dol_registration_file, vehicle_type="Used")
+  ev_manufacturers <- vehicle_manufacturers(data_file=dol_registration_file, engine_type="Battery Electric Vehicle")
+  hev_manufacturers <- vehicle_manufacturers(data_file=dol_registration_file, engine_type="Hybrid Electric Vehicle")
+  phev_manufacturers <- vehicle_manufacturers(data_file=dol_registration_file, engine_type="Plug-in Hybrid Electric Vehicle")
+  processed <- dplyr::bind_rows(total_vehicle_registrations, 
+                                new_vehicle_registrations, used_vehicle_registrations,
+                                ev_manufacturers, hev_manufacturers, phev_manufacturers)
+  return(processed)
   
 }

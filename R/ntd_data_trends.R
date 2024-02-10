@@ -1,307 +1,261 @@
-#' Process NTD Monthly Transit Data
-#'
-#' This function processes Transit Agency monthly data from the Nation Transit Database.
-#' Data is pulled monthly from "https://www.transit.dot.gov/sites/fta.dot.gov/files/".
+#' Download NTD Data Data
 #' 
-#' @return tibble in long form of monthly Boardings, Revenue-Miles and Revenue-Hours by Agency and Region
+#' This function cleans data from the Monthly NTD Raw Data Release.
+#' Data is downloaded from https://www.transit.dot.gov/ntd/data-product/monthly-module-raw-data-release
 #' 
-#' @importFrom magrittr %<>% %>%
+#' @return tibble of transit related metrics for the region and metro areas
+#' 
 #' @importFrom rlang .data
 #' 
 #' @examples
-#' 
-#' ntd.data <- process_ntd_monthly_data()
+#' \dontrun{
+#' transit_data <- process_ntd_data()}
 #' 
 #' @export
 #'
-process_ntd_monthly_data <- function() {
+process_ntd_data <- function() {
   
-  ntd.tabs <- c("UPT","VRM", "VRH")
-  psrc.transit <- c("1","3","5","20","23","29","35","40","54")
-  bus.modes <- c("CB","MB","TB")
-  ferry.modes <- c("FB")
-  light.rail.modes <- c("LR","SR","MG","MO")
-  commuter.rail.modes <- c("CR")
-  vanpool.modes <- c("VP")
+  # Location of the most recently downloaded NTD file
+  file_dir <- "X:/DSA/rtp-dashboard/NTD/"
+  setwd(file_dir)
   
-  today <- Sys.Date()
-  c.yr <- lubridate::year(today)
-  c.dy <- lubridate::day(today)
+  # Choose NTD file
+  data_file <- file.choose()
   
-  if(c.dy <= 7) {
-    c.mo <- formatC(as.integer(lubridate::month(today))-1, width=2, flag="0")
-    d.mo <- month.name[[as.integer(lubridate::month(today)) - 3]]
-    
-  } else {
-    
-    c.mo <- formatC(as.integer(lubridate::month(today)), width=2, flag="0")
-    d.mo <- month.name[[as.integer(lubridate::month(today)) - 2]]
-    
-  }
+  agency_file <- system.file('extdata', 'transit-agency.csv', package='psrcrtp')
+  #agency_file <- paste0("C:/coding/psrcrtp/inst/extdata/transit-agency.csv")
   
-  data.url <- paste0("https://www.transit.dot.gov/sites/fta.dot.gov/files/",c.yr,"-",c.mo,"/",d.mo,"%20",c.yr,"%20Raw%20Monthly%20Ridership%20%28no%20adjustments%20or%20estimates%29_0.xlsx")
+  # Silence the dplyr summarize message
+  options(dplyr.summarise.inform = FALSE)
   
-  utils::download.file(data.url, "working.xlsx", quiet = TRUE, mode = "wb")
-  data.file <- paste0(getwd(),"/working.xlsx")
+  # Passenger Trips, Revenue-Miles and Revenue-Hours tabs
+  ntd_tabs <- c("UPT", "VRM", "VRH")
   
+  # Figure out which Transit Agencies serve which MPO's
+  print("Figuring out which Transit agencies are in which Metro Area.")
+  agencies <- readr::read_csv(agency_file, show_col_types = FALSE) |>
+    dplyr::mutate(NTDID = stringr::str_pad(string=.data$NTDID, width=5, pad="0", side=c("left"))) |>
+    dplyr::mutate(UACE = stringr::str_pad(string=.data$UACE, width=5, pad="0", side=c("left")))
+  
+  ntd_ids <- agencies |> dplyr::select("NTDID") |> dplyr::distinct() |> dplyr::pull()
+  
+  # NTD Modes to Mode Descriptions
+  ntd_modes <- c("AG" = "Rail",
+                 "DR-DO" = "Demand Response",
+                 "DR-PT" = "Demand Response",
+                 "DR-TN" = "Demand Response",
+                 "DR-TX" = "Demand Response",
+                 "CB" = "Bus",
+                 "CC" = "Rail",
+                 "CR" = "Commuter Rail",
+                 "FB" = "Ferry",
+                 "HR" = "Rail",
+                 "LR" = "Rail",
+                 "MB" = "Bus",
+                 "MG" = "Rail",
+                 "MO" = "Rail",
+                 "RB" = "Bus",
+                 "SR" = "Rail",
+                 "TB" = "Bus",
+                 "TR" = "Rail",
+                 "VP" = "Vanpool",
+                 "YR" = "Rail")
+  
+  ntd_modes <- tibble::enframe(ntd_modes) |> dplyr::rename(Mode="name", mode_name="value")
+  
+  # Initial processing of NTD data
   processed <- NULL
-  for (areas in ntd.tabs) {
+  for (areas in ntd_tabs) {
+    print(paste0("Working on ", areas, " data processing and cleanup."))
     
-    t <- dplyr::as_tibble(openxlsx::read.xlsx(data.file, sheet = areas, skipEmptyRows = TRUE, startRow = 1, colNames = TRUE)) %>%
-      dplyr::filter(.data$`4.digit.NTD.ID` %in% psrc.transit, .data$Modes!="DR") %>%
-      dplyr::mutate(Agency = gsub("Snohomish County Public Transportation Benefit Area Corporation","Community Transit",.data$Agency)) %>%
-      dplyr::mutate(Agency = gsub("Central Puget Sound Regional Transit Authority","Sound Transit",.data$Agency)) %>%
-      dplyr::mutate(Agency = gsub("King County Department of Metro Transit","King County Metro",.data$Agency)) %>%
-      dplyr::mutate(Agency = gsub("Pierce County Transportation Benefit Area Authority","Pierce Transit",.data$Agency)) %>%
-      dplyr::mutate(Agency = gsub("City of Everett","Everett Transit",.data$Agency)) %>%
-      dplyr::mutate(Agency = gsub("King County Ferry District","King County Metro",.data$Agency)) %>%
-      dplyr::select(-.data$`4.digit.NTD.ID`, -.data$`5.digit.NTD.ID`, -.data$Active, -.data$Reporter.Type, -.data$UZA, -.data$UZA.Name, -.data$TOS) %>%
-      dplyr::rename(Agency_Modes=.data$Modes) %>%
-      tidyr::pivot_longer(cols = -dplyr::contains("Agency"), names_to="date", values_to="estimate") %>%
-      dplyr::rename(variable=.data$Agency_Modes) %>%
-      dplyr::mutate(concept=areas) %>%
-      tidyr::drop_na() %>%
-      dplyr::mutate(variable=dplyr::case_when(
-        .data$variable %in% commuter.rail.modes ~ "Commuter Rail",
-        .data$variable %in% light.rail.modes ~ "Light Rail, Streetcar & Monorail",
-        .data$variable %in% bus.modes ~ "Bus",
-        .data$variable %in% ferry.modes ~ "Ferry",
-        .data$variable %in% vanpool.modes ~ "Vanpool")) %>%
-      dplyr::mutate(concept=dplyr::case_when(
-        .data$concept == "UPT" ~ "Transit Boardings",
-        .data$concept == "VRM" ~ "Transit Revenue-Miles",
-        .data$concept == "VRH" ~ "Transit Revenue-Hours")) %>%
-      dplyr::mutate(year = as.character(2000 + as.integer(stringr::str_sub(.data$date, 4, 5)))) %>%
-      dplyr::mutate(month = formatC(match(stringr::str_to_title(stringr::str_sub(.data$date, 1, 3)), month.abb), width=2, flag="0")) %>%
-      dplyr::mutate(data_day=paste0(.data$year,"-",.data$month,"-01")) %>%
-      dplyr::mutate(data_day=lubridate::ymd(.data$data_day)) %>%
-      dplyr::mutate(equiv_day=paste0(c.yr,"-",.data$month,"-01")) %>%
-      dplyr::mutate(equiv_day=lubridate::ymd(.data$equiv_day)) %>%
-      dplyr::select(-.data$date) %>%
-      dplyr::group_by(.data$Agency,.data$variable,.data$concept,.data$year,.data$month,.data$data_day,.data$equiv_day) %>%
-      dplyr::summarize(estimate=sum(.data$estimate)) %>%
-      dplyr::as_tibble()
+    # Open file and filter data to only include operators for RTP analysis
+    t <- dplyr::as_tibble(openxlsx::read.xlsx(data_file, sheet = areas, skipEmptyRows = TRUE, startRow = 1, colNames = TRUE)) |>
+      dplyr::mutate(NTD.ID = stringr::str_pad(string=.data$NTD.ID, width=5, pad="0", side=c("left"))) |>
+      dplyr::filter(.data$NTD.ID %in% ntd_ids) |> 
+      dplyr::mutate(Mode = dplyr::case_when(.data$Mode == "DR" & .data$TOS == "DO" ~ "DR-DO",
+                                            .data$Mode == "DR" & .data$TOS == "PT" ~ "DR-PT",
+                                            .data$Mode == "DR" & .data$TOS == "TN" ~ "DR-TN",
+                                            .data$Mode == "DR" & .data$TOS == "TX" ~ "DR-TX",
+                                            TRUE ~ .data$Mode)) |> 
+      dplyr::select(-"Legacy.NTD.ID", -"Status", -"Reporter.Type", -"UACE.CD", -"UZA.Name", -"TOS", -"3.Mode") |> 
+      tidyr::pivot_longer(cols = 4:dplyr::last_col(), names_to = "date", values_to = "estimate", values_drop_na = TRUE) |> 
+      dplyr::mutate(date = lubridate::my(.data$date))
     
-    ifelse(is.null(processed), processed <- t, processed <- dplyr::bind_rows(processed,t))
+    # Add Detailed Mode Names & Aggregate  
+    t <- dplyr::left_join(t, ntd_modes, by=c("Mode")) |> 
+      dplyr::rename(variable="mode_name") |> 
+      dplyr::select(-"Mode") |>
+      dplyr::group_by(.data$NTD.ID, .data$Agency, .data$date, .data$variable) |>
+      dplyr::summarise(estimate=sum(.data$estimate)) |>
+      tidyr::as_tibble()
+    
+    # Add Metro Area Name
+    n <- agencies |> dplyr::select("NTDID", "MPO_AREA", "AGENCY_NAME")
+    t <- dplyr::left_join(t, n, by=c("NTD.ID"="NTDID"), relationship = "many-to-many") |>
+      dplyr::select(-"NTD.ID", -"Agency") |>
+      dplyr::rename(grouping="MPO_AREA", geography="AGENCY_NAME") |>
+      tidyr::as_tibble() |>
+      dplyr::mutate(metric=areas) |>
+      dplyr::mutate(metric = dplyr::case_when(.data$metric == "UPT" ~ "Boardings",
+                                              .data$metric == "VRM" ~ "Revenue-Miles",
+                                              .data$metric == "VRH" ~ "Revenue-Hours"))
+    
+    rm(n)
+    
+    #########################################################################################################
+    ### Full Year Data
+    #########################################################################################################
+    
+    max_yr <- t |> dplyr::select("date") |> dplyr::distinct() |> dplyr::pull() |> max() |> lubridate::year()
+    max_mo <- t |> dplyr::select("date") |> dplyr::distinct() |> dplyr::pull() |> max() |> lubridate::month()
+    
+    if (max_mo <12) {
+      yr <- max_yr-1
+    } else {
+      yr <- max_yr
+    }
+    
+    # Trim Data so it only includes full year data and combine
+    full_yr <- t |>
+      dplyr::filter(lubridate::year(.data$date)<=yr) |>
+      dplyr::mutate(year = lubridate::year(.data$date)) |>
+      dplyr::group_by(.data$year, .data$variable, .data$grouping, .data$geography, .data$metric) |>
+      dplyr::summarise(estimate=sum(.data$estimate)) |>
+      tidyr::as_tibble() |>
+      dplyr::mutate(date = lubridate::ymd(paste0(.data$year,"-12-01"))) |>
+      dplyr::select(-"year")
+    
+    # Metro Areas only need to compare at the total level
+    metro_total <-  full_yr |>
+      dplyr::group_by(.data$date, .data$grouping, .data$metric) |>
+      dplyr::summarise(estimate=sum(.data$estimate)) |>
+      tidyr::as_tibble() |>
+      dplyr::mutate(geography=.data$grouping, geography_type="Metro Areas", variable="All Transit Modes", grouping="Annual")
+    
+    # PSRC Region by Mode
+    region_modes <-  full_yr |>
+      dplyr::filter(.data$grouping=="Seattle") |>
+      dplyr::group_by(.data$date, .data$variable, .data$metric) |>
+      dplyr::summarise(estimate=sum(.data$estimate)) |>
+      tidyr::as_tibble() |>
+      dplyr::mutate(geography="Region", geography_type="Region", grouping="Annual")
+    
+    # PSRC Region Total
+    region_total <-  full_yr |>
+      dplyr::filter(.data$grouping=="Seattle") |>
+      dplyr::group_by(.data$date, .data$metric) |>
+      dplyr::summarise(estimate=sum(.data$estimate)) |>
+      tidyr::as_tibble() |>
+      dplyr::mutate(geography="Region", geography_type="Region", grouping="Annual", variable="All Transit Modes")
+    
+    # PSRC Region by Operator and Mode
+    region_operator_modes <-  full_yr |>
+      dplyr::filter(.data$grouping=="Seattle") |>
+      dplyr::mutate(geography_type="Transit Operator", grouping="Annual")
+    
+    # PSRC Region by Operator
+    region_operator <-  full_yr |>
+      dplyr::filter(.data$grouping=="Seattle") |>
+      dplyr::group_by(.data$date, .data$geography, .data$metric) |>
+      dplyr::summarise(estimate=sum(.data$estimate)) |>
+      tidyr::as_tibble() |>
+      dplyr::mutate(geography_type="Transit Operator", grouping="Annual", variable="All Transit Modes")
+    
+    ifelse(is.null(processed), 
+           processed <- dplyr::bind_rows(list(region_operator,region_operator_modes,
+                                              region_total,region_modes,
+                                              metro_total)), 
+           processed <- dplyr::bind_rows(list(processed,
+                                              region_operator,region_operator_modes,
+                                              region_total,region_modes,
+                                              metro_total)))
+    
+    #########################################################################################################
+    ### Year to Date
+    #########################################################################################################
+    
+    # Ensure that all data is consistent - find the maximum month for YTD calculations
+    max_mo <- t |> dplyr::select("date") |> dplyr::distinct() |> dplyr::pull() |> max() |> lubridate::month()
+    
+    # Trim Data so it only includes ytd for maximum month and combine
+    ytd <- t |>
+      dplyr::filter(lubridate::month(.data$date)<=max_mo) |>
+      dplyr::mutate(year = lubridate::year(.data$date)) |>
+      dplyr::group_by(.data$year, .data$variable, .data$grouping, .data$geography, .data$metric) |>
+      dplyr::summarise(estimate=sum(.data$estimate)) |>
+      tidyr::as_tibble() |>
+      dplyr::mutate(date = lubridate::ymd(paste0(.data$year,"-",max_mo,"-01"))) |>
+      dplyr::select(-"year")
+    
+    # Metro Areas only need to compare at the total level
+    metro_total <-  ytd |>
+      dplyr::group_by(.data$date, .data$grouping, .data$metric) |>
+      dplyr::summarise(estimate=sum(.data$estimate)) |>
+      tidyr::as_tibble() |>
+      dplyr::mutate(geography=.data$grouping, geography_type="Metro Areas", variable="All Transit Modes", grouping="YTD")
+    
+    # PSRC Region by Mode
+    region_modes <-  ytd |>
+      dplyr::filter(.data$grouping=="Seattle") |>
+      dplyr::group_by(.data$date, .data$variable, .data$metric) |>
+      dplyr::summarise(estimate=sum(.data$estimate)) |>
+      tidyr::as_tibble() |>
+      dplyr::mutate(geography="Region", geography_type="Region", grouping="YTD")
+    
+    # PSRC Region Total
+    region_total <-  ytd |>
+      dplyr::filter(.data$grouping=="Seattle") |>
+      dplyr::group_by(.data$date, .data$metric) |>
+      dplyr::summarise(estimate=sum(.data$estimate)) |>
+      tidyr::as_tibble() |>
+      dplyr::mutate(geography="Region", geography_type="Region", grouping="YTD", variable="All Transit Modes")
+    
+    # PSRC Region by Operator and Mode
+    region_operator_modes <-  ytd |>
+      dplyr::filter(.data$grouping=="Seattle") |>
+      dplyr::mutate(geography_type="Transit Operator", grouping="YTD")
+    
+    # PSRC Region by Operator
+    region_operator <-  ytd |>
+      dplyr::filter(.data$grouping=="Seattle") |>
+      dplyr::group_by(.data$date, .data$geography, .data$metric) |>
+      dplyr::summarise(estimate=sum(.data$estimate)) |>
+      tidyr::as_tibble() |>
+      dplyr::mutate(geography_type="Transit Operator", grouping="YTD", variable="All Transit Modes")
+    
+    processed <- dplyr::bind_rows(list(processed,
+                                       region_operator,region_operator_modes,
+                                       region_total,region_modes,
+                                       metro_total))
+    
   }
   
-  r.mode <- processed %>%
-    dplyr::select(-.data$Agency) %>%
-    dplyr::group_by(.data$variable,.data$concept,.data$year,.data$month,.data$data_day,.data$equiv_day) %>%
-    dplyr::summarize(estimate=sum(.data$estimate)) %>%
-    dplyr::as_tibble() %>%
-    dplyr::mutate(Agency="Region")
+  rm(region_operator,region_operator_modes,region_total,region_modes,metro_total, ytd, t, full_yr)
   
-  r <- r.mode %>%
-    dplyr::select(-.data$variable) %>%
-    dplyr::group_by(.data$Agency,.data$concept,.data$year,.data$month,.data$data_day,.data$equiv_day) %>%
-    dplyr::summarize(estimate=sum(.data$estimate)) %>%
-    dplyr::as_tibble() %>%
-    dplyr::mutate(variable="Total Transit")
+  # Pivot NTD data wide and create new metric: boardings per revenue-hour
+  processed_wide <- processed |> 
+    tidyr::pivot_wider(names_from = "metric",
+                       values_from = "estimate") |> 
+    dplyr::mutate(`Boardings-per-Hour` = ifelse(.data$`Revenue-Hours` > 0,
+                                                round(.data$`Boardings` / .data$`Revenue-Hours`, 2), NA))
   
-  processed <- dplyr::bind_rows(list(processed, r.mode, r)) %>% dplyr::rename(geography=.data$Agency)
-  file.remove(data.file)
+  # Pivot NTD data back to long and create region-wide estimates per metric
+  processed <- processed_wide |> 
+    tidyr::pivot_longer(cols = c("Boardings",
+                                 "Revenue-Miles",
+                                 "Revenue-Hours",
+                                 "Boardings-per-Hour"),
+                        names_to = "metric",
+                        values_to = "estimate")
+  
+  processed <- processed |> 
+    dplyr::mutate(year = as.character(lubridate::year(.data$date))) |>
+    dplyr::select("year", "date", "geography", "geography_type", "variable", "grouping", "metric", "estimate") |>
+    tidyr::drop_na() |>
+    dplyr::filter(.data$estimate >0)
+  
+  print("All done.")
   
   return(processed)
-  
-}
-
-#' Summarize Transit Data by Urbanized Area
-#'
-#' This function processes Transit Agency monthly data from the Nation Transit Database and aggregate to the Urbanized Areas.
-#' Data is pulled monthly from "https://www.transit.dot.gov/sites/fta.dot.gov/files/".
-#' 
-#' @param yr Four digit calendar year as string for Summary year
-#' @param pop.limit Population threshold to use to filter down Urbanized Areas - defaults to 1,000,000
-#' @param census.yr Four digit calendar year as string for Census Year for UZA population data - defaults to "2020"
-#' @return tibble in long form of Year to Date (or annual if it is a compelte year) Boardings and Revenue-Hours by Urbanized Area
-#' 
-#' @importFrom magrittr %<>% %>%
-#' @importFrom rlang .data
-#' 
-#' @examples
-#' 
-#' uza.data <- process_ntd_uza_data(yr="2022", census.yr="2020")
-#' 
-#' @export
-#'
-
-process_ntd_uza_data <- function(yr, pop.limit=1000000, census.yr="2020") {
-  
-  ntd.tabs <- c("UPT", "VRH")
-  
-  today <- Sys.Date()
-  c.yr <- lubridate::year(today)
-  c.dy <- lubridate::day(today)
-  
-  if(c.dy <= 7) {
-    c.mo <- formatC(as.integer(lubridate::month(today))-1, width=2, flag="0")
-    d.mo <- month.name[[as.integer(lubridate::month(today)) - 3]]
-    
-  } else {
-    
-    c.mo <- formatC(as.integer(lubridate::month(today)), width=2, flag="0")
-    d.mo <- month.name[[as.integer(lubridate::month(today)) - 2]]
-    
-  }
-  
-  data.url <- paste0("https://www.transit.dot.gov/sites/fta.dot.gov/files/",c.yr,"-",c.mo,"/",d.mo,"%20",c.yr,"%20Raw%20Database.xlsx")
-  
-  utils::download.file(data.url, "working.xlsx", quiet = TRUE, mode = "wb")
-  data.file <- paste0(getwd(),"/working.xlsx")
-  uza.file <- system.file('extdata', 'uaz_ua_codes.xlsx', package='psrctrends')
-  
-  processed <- NULL
-  for (areas in ntd.tabs) {
-    
-    t <- dplyr::as_tibble(openxlsx::read.xlsx(data.file, sheet = areas, skipEmptyRows = TRUE, startRow = 1, colNames = TRUE)) %>%
-      dplyr::filter(.data$Modes!="DR") %>%
-      dplyr::select(-.data$`4.digit.NTD.ID`, -.data$`5.digit.NTD.ID`, -.data$Agency, -.data$Active, -.data$Reporter.Type, -.data$Modes, -.data$TOS, -.data$UZA) %>%
-      tidyr::pivot_longer(cols = -dplyr::contains("UZA"), names_to="date", values_to="estimate") %>%
-      tidyr::drop_na() %>%
-      dplyr::group_by(.data$UZA.Name,.data$date) %>%
-      dplyr::summarize(estimate=sum(.data$estimate)) %>%
-      dplyr::as_tibble() %>%
-      dplyr::filter(.data$UZA.Name != "Non-UZA") %>%
-      dplyr::mutate(concept=areas) %>%
-      dplyr::mutate(variable=dplyr::case_when(
-        .data$concept == "UPT" ~ "Total Boardings",
-        .data$concept == "VRM" ~ "Total Revenue-Miles",
-        .data$concept == "VRH" ~ "Total Revenue-Hours")) %>%
-      dplyr::mutate(concept="Transit by Urbanized Area") %>%
-      dplyr::mutate(year = as.character(2000 + as.integer(stringr::str_sub(.data$date, 4, 5)))) %>%
-      dplyr::mutate(month = formatC(match(stringr::str_to_title(stringr::str_sub(.data$date, 1, 3)), month.abb), width=2, flag="0")) %>%
-      dplyr::mutate(data_day=paste0(.data$year,"-",.data$month,"-01")) %>%
-      dplyr::mutate(data_day=lubridate::ymd(.data$data_day)) %>%
-      dplyr::mutate(equiv_day=paste0(c.yr,"-",.data$month,"-01")) %>%
-      dplyr::mutate(equiv_day=lubridate::ymd(.data$equiv_day)) %>%
-      dplyr::select(-.data$date) %>%
-      dplyr::filter(.data$year == yr)
-    
-    ifelse(is.null(processed), processed <- t, processed <- dplyr::bind_rows(processed,t))
-    rm(t)
-  }
-  
-  # Aggregate Data by UZA for Analysis Year
-  processed <- processed %>%
-    dplyr::select(-.data$month, -.data$data_day, -.data$equiv_day) %>%
-    dplyr::group_by(.data$UZA.Name, .data$variable, .data$concept, .data$year) %>%
-    dplyr::summarize(estimate=sum(.data$estimate)) %>%
-    dplyr::as_tibble()
-  
-  # Add in UZA Population for per Capita Metrics
-  u <- dplyr::as_tibble(openxlsx::read.xlsx(uza.file, sheet = "UZA_2010", skipEmptyRows = TRUE, startRow = 1, colNames = TRUE))
-  
-  ua.pop <- tidycensus::get_acs(geography = "urban area", year = as.integer(census.yr), variables = "B01001_001", survey="acs5") %>%
-    dplyr::select(.data$GEOID, .data$estimate) %>%
-    dplyr::rename(population=.data$estimate) %>%
-    dplyr::mutate(GEOID=as.integer(.data$GEOID))
-  
-  u <- dplyr::left_join(u, ua.pop, by=c("UACE"="GEOID"))
-  
-  processed <- dplyr::left_join(processed, u , by=c("UZA.Name")) %>%
-    dplyr::rename(geography=.data$UZA.Name) %>%
-    dplyr::select(-.data$UZA, -.data$UACE) 
-  
-  boardings <- processed %>% 
-    dplyr::filter(.data$variable == "Total Boardings") %>%
-    dplyr::filter(.data$population >=pop.limit | .data$geography=="Bremerton, WA")
-  
-  per.capita <- processed %>% 
-    dplyr::filter(.data$variable == "Total Boardings") %>% 
-    dplyr::mutate(estimate = .data$estimate/.data$population) %>%
-    dplyr::mutate(variable = "Boardings per Capita") %>%
-    dplyr::filter(.data$population >=pop.limit | .data$geography=="Bremerton, WA")
-  
-  revenue.hours <- processed %>% 
-    dplyr::filter(.data$variable == "Total Revenue-Hours") %>%
-    dplyr::filter(.data$population >=pop.limit | .data$geography=="Bremerton, WA")
-  
-  hrs <- revenue.hours %>% 
-    dplyr::select(.data$geography,.data$estimate) %>%
-    dplyr::rename(hours=.data$estimate)
-  
-  rides.per.hr <- dplyr::left_join(boardings, hrs, by=c("geography")) %>%
-    dplyr::mutate(estimate = .data$estimate/.data$hours) %>%
-    dplyr::mutate(variable = "Boardings per Revenue Hour") %>%
-    dplyr::select(-.data$hours)
-  
-  final <- dplyr::bind_rows(list(boardings,revenue.hours,per.capita,rides.per.hr))
-  
-  # Create a plot ID column for ease of use for plotting
-  psrc.uza <- c("Seattle, WA","Bremerton, WA")
-  sister.uza <- c("Denver-Aurora, CO", "Detroit, MI", "Minneapolis-St. Paul, MN-WI", "Phoenix-Mesa, AZ", "Portland, OR-WA", "San Diego, CA", "San Francisco-Oakland, CA", "Tampa-St. Petersburg, FL")
-  big.uza <- c("Atlanta, GA", "Boston, MA-NH-RI","Dallas-Fort Worth-Arlington, TX", "Houston, TX", "Miami, FL", "Philadelphia, PA-NJ-DE-MD", "Washington, DC-VA-MD")
-  biggest.uza <- c("Chicago, IL-IN", "Los Angeles-Long Beach-Anaheim, CA", "New York-Newark, NY-NJ-CT")
-  
-  final <- final %>%
-    dplyr::mutate(plot_id = dplyr::case_when(
-      .data$geography %in% psrc.uza ~ "PSRC Urban Areas",
-      .data$geography %in% sister.uza ~ "Similar Urban Areas",
-      .data$geography %in% big.uza ~ "Larger Urban Areas",
-      .data$geography %in% biggest.uza ~ "Largest Urban Areas")) %>%
-    dplyr::mutate(plot_id = tidyr::replace_na(.data$plot_id, "Other Urban Areas")) %>%
-    dplyr::mutate(plot_id = stringr::str_wrap(.data$plot_id, width = 8))
-  
-  file.remove(data.file)
-  
-  return(final)
-  
-}
-
-#' Summarize Year to Date Transit Data by Mode and Operator
-#'
-#' This function processes Transit Agency monthly data from the Nation Transit Database and aggregate to year to date.
-#' Data is pulled monthly from "https://www.transit.dot.gov/sites/fta.dot.gov/files/".
-#' 
-#' @param c.yr Four digit calendar year as string for last year to analyze
-#' @param c.mo Month for analysis in year to date calculations if the latest month isn't desired - defaults to NULL
-#' @return tibble in long form of Year to Date (or annual if it is a complete year) of Transit Data by Mode and Operator
-#' 
-#' @importFrom magrittr %<>% %>%
-#' @importFrom rlang .data
-#' 
-#' @examples
-#' 
-#' ntd.ytd <- process_ntd_year_to_date_data(c.yr="2022")
-#' 
-#' @export
-#'
-process_ntd_year_to_date_data <- function(c.yr, c.mo=NULL) {
-  
-  # Step 1 - Get monthly data from NTD using package
-  monthly <- psrctrends::process_ntd_monthly_data()
-  
-  if (is.null(c.mo)) {
-    
-    latest.month <- monthly %>% 
-      dplyr::select(.data$data_day) %>% 
-      dplyr::filter(lubridate::year(.data$data_day) == c.yr) %>%
-      dplyr::filter(lubridate::month(.data$data_day) == max(lubridate::month(.data$data_day))) %>%
-      dplyr::distinct() %>%
-      dplyr::pull() %>%
-      lubridate::month()
-    
-    ytd <- monthly %>% 
-      dplyr::filter(.data$year <= c.yr) %>%
-      dplyr::filter(lubridate::month(.data$data_day) <= latest.month) %>%
-      dplyr::select(-.data$month, -.data$data_day, -.data$equiv_day) %>%
-      dplyr::group_by(.data$geography, .data$variable, .data$concept, .data$year) %>%
-      dplyr::summarise(estimate=sum(.data$estimate)) %>%
-      dplyr::as_tibble()
-    
-  } else {
-    
-    ytd <- monthly %>% 
-      dplyr::filter(.data$year <= c.yr) %>%
-      dplyr::filter(lubridate::month(.data$data_day) <= c.mo) %>%
-      dplyr::select(-.data$month, -.data$data_day, -.data$equiv_day) %>%
-      dplyr::group_by(.data$geography, .data$variable, .data$concept, .data$year) %>%
-      dplyr::summarise(estimate=sum(.data$estimate)) %>%
-      dplyr::as_tibble()
-  }
-  
-  
-  return(ytd)
   
 }

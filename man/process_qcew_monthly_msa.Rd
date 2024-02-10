@@ -4,12 +4,12 @@
 \alias{process_qcew_monthly_msa}
 \title{Process QCEW Monthly MSA Data}
 \usage{
-process_qcew_monthly_msa(c.yr, c.mo)
+process_qcew_monthly_msa(yr, mo)
 }
 \arguments{
-\item{c.yr}{Current four digit calendar year as integer}
+\item{yr}{Current four digit calendar year as integer}
 
-\item{c.mo}{Current month as integer, no leading zeros}
+\item{mo}{Current month as integer, no leading zeros}
 }
 \value{
 tibble in long form of QCEW Monthly Employment data by MSA+
@@ -19,7 +19,7 @@ This function processes MSA monthly data from QCEW.
 Data is pulled monthly from "https://media.esd.wa.gov/esdwa/Default/ESDWAGOV/labor-market-info/Libraries/Economic-reports/Washington-employment-estimates/".
 }
 \examples{
-
-qcew.jobs <- process_qcew_monthly_msa(c.yr=2022, c.mo=5)
+\dontrun{
+jobs_data <- process_qcew_monthly_msa(yr=2023, mo=12)}
 
 }
