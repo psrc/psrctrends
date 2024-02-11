@@ -27,5 +27,8 @@ Imports:
     RSocrata,
     readr,
     psrcelmer,
+    psrccensus,
+    tidycensus,
+    tidyselect,
     tibble
 RoxygenNote: 7.2.3
