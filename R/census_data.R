@@ -125,3 +125,33 @@ process_acs_data <- function(years=c(2021), acs_tbl="B08301", acs_variables="com
   
   return(working_data)
 }
+
+#' Summarize Census Data
+#'
+#' This function summarizes ACS Census Data fro Cities, Counties, Region and MPOs
+#' 
+#' @param years Four digit integer (or vector of integers) for year(s) of analysis
+#' @return tibble in long form of ACS data
+#' 
+#' @importFrom rlang .data
+#' 
+#' @examples
+#' \dontrun{
+#' census_data <- summarize_census_data(years=c(2022))}
+#' 
+#' @export
+#'
+summarize_census_data <- function(years=c(2021)) {
+  
+  print("Working on Mode to Work")
+  mw <- process_acs_data(years=years, acs_tbl="B08301", acs_variables="commute-modes")
+  print("Working on Travel time to Work")
+  tw <- process_acs_data(years=years, acs_tbl="B08303", acs_variables="commute-times")
+  print("Working on Departure time to work")
+  dw <- process_acs_data(years=years, acs_tbl="B08011", acs_variables="departure-time")
+  
+  processed <- dplyr::bind_rows(mw, tw, dw)
+  
+  return(processed)
+}
+
