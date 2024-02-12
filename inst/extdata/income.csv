@@ -1,0 +1,18 @@
+﻿variable,simple_label,label
+B19001_001,Total,Total
+B19001_002,under $50k,less than $10k
+B19001_003,under $50k,$10k to $15k
+B19001_004,under $50k,$15k to $20k
+B19001_005,under $50k,$20k to $25k
+B19001_006,under $50k,$25k to $30k
+B19001_007,under $50k,$30k to $35k
+B19001_008,under $50k,$35k to $40k
+B19001_009,under $50k,$40k to $45k
+B19001_010,under $50k,$45k to $50k
+B19001_011,$50k to $75k,$50k to $60k
+B19001_012,$50k to $75k,$60k to $75k
+B19001_013,$75k to $100k,$75k to 100k
+B19001_014,$100k to $150k,$100k to $125k
+B19001_015,$100k to $150k,$125k to $150k
+B19001_016,$150k to $200k,$150k to $200k
+B19001_017,more than $200k,more than $200k

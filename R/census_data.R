@@ -149,8 +149,18 @@ summarize_census_data <- function(years=c(2021)) {
   tw <- process_acs_data(years=years, acs_tbl="B08303", acs_variables="commute-times")
   print("Working on Departure time to work")
   dw <- process_acs_data(years=years, acs_tbl="B08011", acs_variables="departure-time")
+  print("Working on Population by Race")
+  re <- process_acs_data(years=years, acs_tbl="B03002", acs_variables="race-ethnicity")
+  print("Working on Housing Tenure")
+  ht <- process_acs_data(years=years, acs_tbl="B25003", acs_variables="housing-tenure")
+  print("Working on Educational Attainment")
+  ea <- process_acs_data(years=years, acs_tbl="B15002", acs_variables="educational-attainment")
+  print("Working on Age")
+  age <- process_acs_data(years=years, acs_tbl="B01001", acs_variables="age")
+  print("Working on Income")
+  income <- process_acs_data(years=years, acs_tbl="B19001", acs_variables="income")
   
-  processed <- dplyr::bind_rows(mw, tw, dw)
+  processed <- dplyr::bind_rows(mw, tw, dw, re, ht, ea, age, income)
   
   return(processed)
 }
